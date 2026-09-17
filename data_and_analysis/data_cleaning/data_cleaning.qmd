@@ -1,0 +1,410 @@
+---
+title: "Data cleaning"
+format: 
+  html:
+    embed-resources: true
+    self-contained-math: true
+    toc: true
+    toc-depth: 6
+    toc-location: left
+editor: visual
+---
+
+I prepared two separate, clean CSV files: one for the learning phase data, and one for the judgment phase data.
+
+### R preparation
+
+```{r package loading and data read-in}
+#| message: false
+#| warning: false
+if (!requireNamespace("pacman", quietly = TRUE)) { 
+  install.packages("pacman")
+} 
+library("pacman")
+
+p_load(tidyverse, here, jsonlite, stringr)
+
+#read in data 
+surveycircle_data_path  <- "/Users/xiaotongliu/Desktop/0_experience_based_event_ranking/data_and_analysis/data_cleaning/raw_data/surveycircle_data"
+studentcircle_data_path <- "/Users/xiaotongliu/Desktop/0_experience_based_event_ranking/data_and_analysis/data_cleaning/raw_data/studentcircle_data"
+
+surveycircle_files <- list.files(
+  path       = surveycircle_data_path,
+  pattern    = "^data\\.txt$",
+  recursive  = TRUE,
+  full.names = TRUE
+)
+
+studentcricle_files <- list.files(
+  path = studentcircle_data_path ,
+  pattern = "^data\\.txt$",
+  recursive  = TRUE,
+  full.names = TRUE
+)
+
+read_one <- function(path) {
+  # Extract the IDs from the folder names in the path
+  study_id <- str_extract(path, "study_result_\\d+")
+  comp_id  <- str_extract(path, "comp-result_\\d+")
+  
+  # convert json files into data frame
+  content <- read_file(path) |>
+    str_split('\n') |> first() |>
+    discard(function(x) x == '') |>
+    map_dfr(fromJSON, flatten = TRUE) |>
+    select(-starts_with("...")) |>
+    fill(id, condition, .direction = "down")
+  
+  # Attach the IDs 
+  content |>
+    mutate(study_id = study_id, comp_id = comp_id, .before = 1)
+}
+
+# Read all files and combine into one data frame
+surveycircle_data <- map_dfr(surveycircle_files , read_one)
+studentcircle_data <- map_dfr(studentcricle_files, read_one)
+
+#head(surveycircle_data)
+#head(studentcircle_data)
+
+#combine the data collected from surveycircle.com 
+#setequal(names(studentcircle_data), names(surveycircle_data |> select(-randomNumber) ))
+
+studentcircle_data <- studentcircle_data |> 
+  mutate(source = "studentcircle")
+
+surveycircle_data <- surveycircle_data |> 
+  mutate(source = "surveycircle") |> 
+  select(-randomNumber)
+
+combined_df <- bind_rows(studentcircle_data, surveycircle_data) |>
+  group_by(study_id) |>
+  filter(any(tolower(trimws(quality)) %in% c("serious", "notserious"))) |>
+  ungroup()
+
+```
+
+```{r code to draw lottery (for compensating participants)}
+#email <- combined_df$email_address |> unique() 
+#email[grepl("@", email)]
+#sample(email, 5)
+
+```
+
+### Data diagnosis and exclusion：
+
+447 participants: 92 participants from studentcircle; 355 participants from surveycircle.
+
+```{r overview}
+combined_df |> group_by(source) |> summarise(n = n_distinct(study_id))
+```
+
+1.  Non-preregistered exclusion: Identify participants with duplicate datasets.
+
+    Excluded participants who started the experiment and completed at least the first block of the experiment multiple times.
+
+    Sample tracking:
+
+    14 participants were excluded on this basis.
+
+    N = 447-14 = 433 remaining for analysis.
+
+    ```{r exclusion criterion 1}
+    df <- combined_df |> 
+      group_by(study_id)  |> 
+      filter(n_distinct(id) == 1) |> 
+      ungroup()
+
+    #df$study_id |> unique() |> length()
+    #433 participant without mutiple starts 
+
+    #df_with_mutiple_starts <- df |> 
+    #  group_by(study_id) |> 
+    #  filter(n_distinct(id) > 1) |> 
+    #  ungroup()
+    #
+    #df_with_mutiple_starts$study_id |> unique() |> length()
+    ##14 participants have mutiple starts 
+
+    ```
+
+2.  Preregistered data exclusion criterion: A passing criterion was set such that participants must correctly respond to all four attention check items to be included in the analysis. Participants who failed any single attention check item were excluded.
+
+    Sample tracking:
+
+    41 participants were excluded on this basis.
+
+    N = 433-41 = 392 remaining for analysis.
+
+    ```{r exclusion criterion 2}
+    failed_attention <- df |> 
+      filter(sender_type == "html.Screen") |> 
+      select(id, sender, response_action) |> 
+      filter(
+        (sender == "Attentional check_L") |
+        (sender == "Attentional check_S")
+      ) |> 
+      group_by(id) |>   
+      mutate(
+        attention_correct = sum(
+          (sender == "Attentional check_L" & response_action == "keypress(l,L)") |
+          (sender == "Attentional check_S" & response_action == "keypress(s,S)")
+        )
+      ) |> 
+      filter(attention_correct != 4) |> 
+      ungroup()
+
+    failed_attention$id |> unique() |> length() #41 participants failed the attention check items 
+
+    df <- df |>  filter(! id %in% failed_attention$id)
+    ```
+
+3.  Preregistered data exclusion criterion: Exclude participants who indicated they did not take the study seriously and requested that the researcher discard their data.
+
+    Sample tracking:
+
+    4 participants indicated they were not serious.
+
+    N = 392 - 4 = 388 remaining for analysis.
+
+    ```{r exclusion criterion 3}
+    criterion3 <- df |> 
+      select(id, `aids `, aids_specification, prior_knowledge, prior_knowledge_specification, `interruption `, quality, comments) |> 
+      unique()  
+
+    data_quality_check <- criterion3 |> 
+      filter(quality == "notserious") |> 
+      pull(id) #4 participants 
+
+    df <- df |> 
+      filter (!id %in% data_quality_check)
+    ```
+
+4.  Non-preregistered data exclusion criterion: Exclude participants who indicated using external aids like paper and pens (e.g., tallying stimulus frequencies, such as counting how often different vegetables were drawn).
+
+    Sample tracking:
+
+    7 participants indicated using aids.
+
+    N = 388 - 7 = 381 remaining for analysis.
+
+    ```{r exclusion criterion 4}
+    aids_check <- df |> 
+      filter(`aids ` == "yes_aid") |> 
+      pull(id)
+
+    df <- df |> 
+      filter (!id %in% aids_check)
+    ```
+
+### Demographic information
+
+```{r}
+df_demo <- df |> 
+  select(id, age, gender, language, motherLanguage, profession, subject, level_education) |> 
+  drop_na() |>
+  mutate(
+    across(where(is.character), ~ na_if(str_trim(.x), "")),
+    age_num = as.numeric(age),
+    age_num = if_else(age_num == 999, NA_real_, age_num)
+  )
+
+
+df_demo |>
+  summarise(
+    n_total   = n(),
+    n_valid   = sum(!is.na(age_num)),
+    n_excl    = sum(is.na(age_num)),
+    mean_age  = mean(age_num, na.rm = TRUE),
+    sd_age    = sd(age_num, na.rm = TRUE)
+  ) |>
+  mutate(across(where(is.numeric), ~ round(.x, 2)))
+
+df_demo |>
+  dplyr::select(gender, language, motherLanguage, 
+                profession, subject, level_education) |>
+  mutate(across(everything(), as.character)) |>
+  pivot_longer(everything(), names_to = "variable", values_to = "level") |>
+  count(variable, level) |>
+  group_by(variable) |>
+  mutate(pct = round(100 * n / sum(n), 1)) |>
+  arrange(variable, desc(n)) |>
+  ungroup()
+
+df |>
+  group_by(condition) |>
+  summarise(n_unique_ids = n_distinct(study_id))
+```
+
+### Learning phase data
+
+```{r preparing the learning phase data}
+#select the relevant variables 
+data_learning <- df |>  
+  fill(id,condition, .direction = "down") |> 
+  filter(sender %in% c("Welcome", "Consent", "ISI_500", "Sequence_fruits",
+                       "Loop_fruits1", "Loop_fruits2", "Loop_fruits3",
+                      "htmlscreen_showing_choice", "htmlscreen_showing_award",
+                      "Attentional check_S", "Attentional check_L", "fruit_learning_phase",
+                      "Sequence_risky_choice_EFGH", "Loop_EFGH1",
+                      "Loop_EFGH2", "Loop_EFGH3", "Sequence_veggie_learning")) |> 
+  select(id, condition, sender, sender_id, response, 
+         response_action, ended_on, button1, button2, 
+         box, counter_trial, counter_learning_veggie,
+         correct, guessingcorrect, shown_award) 
+
+data_learning <- data_learning |> 
+  mutate(sender_id = word(sender_id, 1, 6, sep = "_")) |> 
+  #truncates sender_id to its first 6 underscore-separated digits so that all screens within the same trial (choice screen, feedback screen, ISI, sequence) share a common identifier.
+  group_by(id, sender_id) |> 
+  fill(response, correct, response_action, guessingcorrect,
+       shown_award, .direction = "down")  |>  
+  filter(sender %in% c("Sequence_risky_choice_EFGH", "Loop_EFGH1",
+         "Loop_EFGH2", "Loop_EFGH3", "Sequence_fruits", "Loop_fruits1",
+         "Loop_fruits2", "Loop_fruits3")) |> 
+  select(id, condition, sender, sender_id,
+         counter_learning_veggie, counter_learning_fruit = counter_trial,
+         response, button1, button2, response_action,
+         feedback_fruit = guessingcorrect, feedback_veggie = shown_award) |> 
+  ungroup() |> 
+  group_by(id) |> 
+  mutate(
+    counter_learning_veggie = ifelse( sender == "Sequence_risky_choice_EFGH", 
+                                      cumsum(sender == "Sequence_risky_choice_EFGH"),
+                                      NA_integer_),
+    counter_learning_fruit = ifelse (sender == "Sequence_fruits",
+                                     cumsum(sender == "Sequence_fruits"),
+                                     NA_integer_)
+  ) |> 
+  #each counter counts the trials sequentially within each participant (grouped by id)
+  #counter_learning_veggie counts how many veggie learning trials have occurred so far within each participant 
+  #counter_learning_fruit counts how many fruit trials have occurred so far within each participant 
+  #non-sequence rows get NA 
+  mutate(
+    button_not_chosen = case_when(
+      response == "button1" ~ button2,
+      response == "button2" ~ button1,
+      TRUE ~ NA),
+    button_chosen = case_when(
+      response == "button1" ~ button1,
+      response == "button2" ~ button2,
+      TRUE ~ NA
+      )
+  ) |> 
+  # button_chosen returns what (the actual stimulus, e.g., which fruit) the participant pressed/chose
+  # button_not_chosen returns what the participant did not press/choose
+  mutate(
+    drawn_fruit = case_when(
+      feedback_fruit == TRUE ~ button_chosen,
+      feedback_fruit == FALSE ~ button_not_chosen,
+      TRUE ~ NA
+    ),
+    drawn_veggie = case_when(
+      feedback_veggie == TRUE ~ button_chosen,
+      feedback_veggie == FALSE ~ button_not_chosen,
+      TRUE ~ NA
+    )
+  )
+  #drawn_fruit and drawn_veggie return what was acutally drawn 
+
+write.csv(data_learning, "../data_learning.csv", row.names = FALSE)
+```
+
+### Judgment phase data
+
+```{r preparing judgment phase data}
+#keep relevant variables for judgment phase data 
+data_judgment <- df |> 
+  filter(sender %in% c("Welcome", "Ranking_Screen",
+                       "show_choice"))  |> 
+  select(id, sender, sender_id, condition, 
+         response, response_action, 
+         eveTopleft, eveTopright,
+         eveDownleft, eveDownright,
+         order_one_contents, 
+         order_two_contents,
+         order_three_contents,
+         order_four_contents,
+         compare1, compare2) |> 
+  fill(id, condition, .direction = "down") 
+
+fruits  <- c("banana", "orange", "strawberry", "cherry")
+veggies <- c("carrot", "raddish", "tomato", "broccoli")
+
+fruit_pat  <- str_c(fruits,  collapse = "|")
+veggie_pat <- str_c(veggies, collapse = "|")
+
+data_judgment <- data_judgment |>
+  mutate(
+    part = case_when(
+      if_any(c(compare1, compare2, eveTopleft, eveTopright, eveDownleft, eveDownright),
+             ~ str_detect(.x, fruit_pat))  ~ "fruit",
+      if_any(c(compare1, compare2, eveTopleft, eveTopright, eveDownleft, eveDownright),
+             ~ str_detect(.x, veggie_pat)) ~ "veggie"
+    )
+  ) |> 
+  rowwise() |> 
+  mutate(across(starts_with("order"), 
+                ~ paste(unlist(.), collapse = ", "))) |> 
+  ungroup()
+```
+
+```{r rename the stimuli}
+# banana (from box A): A
+# cherry (from box A): B
+# orange (form box B): C 
+# strawberry(from box B): D
+# carrot(from box C): E
+# tomato(from box C): F
+# broccoli(from box D): G
+# radish(from box D): H
+# A&B are a pair of complementary events, C&D are a pair of complementary events,
+# E&F are a pair of complementary events, G&H are a pair of complementary events 
+map_icons <- function(x) {
+  case_when(
+    x %in% c("banana.svg", "box_banana.svg") ~ "A",
+    x %in% c("cherry.svg", "box_cherry.svg") ~ "B",
+    x %in% c("orange.svg", "box_orange.svg") ~ "C",
+    x %in% c("strawberry.svg", "box_strawberry.svg") ~ "D",
+    x %in% c("carrot.svg", "box_carrot.svg") ~ "E",
+    x %in% c("tomato.svg", "box_tomato.svg") ~ "F",
+    x %in% c("broccoli.svg", "box_broccoli.svg") ~ "G",
+    x %in% c("raddish.svg", "box_raddish.svg") ~ "H",
+    TRUE ~ x
+  )
+}
+
+data_judgment <- data_judgment |>  
+  mutate(across(c(compare1, compare2,
+                  eveTopleft, eveDownleft,
+                  eveTopright, eveDownright), map_icons))
+
+#recode variable: order_one_contents; order_two_contents; order_three_contents; order_four_contents
+#replacing "eveTopleft, eveTopright, eveDownleft, eveDownright" with 
+#their corresponding events (A, B, C, ...) 
+map_eve_positions <- function(contents, eveTopleft, eveTopright, eveDownleft, eveDownright) {
+  str_c(
+    ifelse(str_detect(contents, "eveTopleft"),   eveTopleft,   ""),
+    ifelse(str_detect(contents, "eveTopright"),  eveTopright,  ""),
+    ifelse(str_detect(contents, "eveDownleft"),  eveDownleft,  ""),
+    ifelse(str_detect(contents, "eveDownright"), eveDownright, ""),
+    collapse = ", "
+  )
+}
+
+data_judgment <- data_judgment |> 
+  rowwise() |> 
+  mutate(
+    across(
+      # Choose the columns to transform
+      .cols = c(order_one_contents, order_two_contents, 
+                order_three_contents, order_four_contents),
+      # Apply the map_eve_positions function to each selected column
+      .fns = ~ map_eve_positions(., eveTopleft, eveTopright, eveDownleft, eveDownright),
+      # Create new columns named "{oldcol}_options"
+      .names = "{.col}_options"
+    )
+  ) 
+
+write.csv(data_judgment, "../data_judgment.csv", row.names = FALSE)
+```
