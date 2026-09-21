@@ -1,0 +1,682 @@
+---
+title: "Data Analysis of learning-phase data"
+format: 
+  html:
+    embed-resources: true
+    self-contained-math: true
+    toc: true
+    toc-depth: 6
+    toc-location: left
+editor: visual
+---
+
+### R preparation
+
+```{r}
+if (!requireNamespace("pacman", quietly = TRUE)) { 
+  install.packages("pacman")
+} 
+library("pacman")
+p_load(tidyverse, here, viridis, patchwork, ggtext, lme4)
+
+
+df_learning <- read.csv("data_learning.csv")
+```
+
+***The goal of analyzing the learning-phase data is to evaluate the learning outcomes and prepare subsamples for robustness analysis.***
+
+### Wiki
+
+Cherry and banana are a pair of alternatives: cherry (coded as "A" in the judgment phase data) and banana (coded as "B" in the judgment phase data) are both from Box A, each having an averaged probability of 0.6 and 0.4, respectively, averaged across participants.
+
+Orange and strawberry are a pair of alternatives: orange (coded as "C" in the judgment phase data) and strawberry (coded as "D" in the judgment phase data) are both from Box B, each having an averaged probability of 0.5 and 0.5, respectively, averaged across participants.
+
+Carrot and tomato is a pair of alternatives: carrot and tomato are both from Box C, each having a probability of 0.8 and 0.2 being drawn by design.
+
+Broccoli and radish is a pair of alternatives: broccoli and radish are both from Box D, each having a probability of 0.9 and 0.1 being drawn by design.
+
+Strawberry vs Orange —\> A (0.5) v.s. not-A (0.5)
+
+Banana vs Cherry —\> A (0.6) v.s. not-A (0.4)
+
+Carrot versus Tomato —\> A (0.8) v.s. not-A (0.2)
+
+Broccoli versus Radish —\> A (0.9) v.s. not-A (0.1)
+
+### Dataset preparation
+
+1\. Calculate the probability of different pairs of alternatives within participant
+
+```{r}
+#The probability of banana and cherry being drawn realized in the experiment calculated within participants:
+df_learning_banana <- df_learning |> 
+  filter(button1 == "banana.svg" | button2 == "banana.svg") |> 
+  select(where(~ !all(is.na(.)))) |> 
+  group_by(id) |> 
+  mutate(n_rows = n()) |> 
+  group_by(id) |> 
+  mutate(n_banana = sum(drawn_fruit == "banana.svg"),
+         n_cherry = sum(drawn_fruit == "cherry.svg")) |> 
+  ungroup() |> 
+  mutate(prop_banana = n_banana / n_rows,
+         prop_cherry = n_cherry / n_rows) |> 
+  mutate(check = prop_banana + prop_cherry) |> 
+  select(id, prop_banana, prop_cherry) |> 
+  unique()
+
+#df_learning_banana |> 
+#  summarise(
+#    mean   = mean(prop_banana),
+#    sd     = sd(prop_banana),
+#    min    = min(prop_banana),
+#    max    = max(prop_banana),
+#    median = median(prop_banana)
+#  )
+#
+#ggplot(df_learning_banana, aes(x = prop_banana)) +
+#  geom_histogram(aes(y = after_stat(density)),
+#                 bins = 30, fill = "steelblue", color = "white", alpha = 0.8) +
+#  geom_density(color = "darkred", linewidth = 1) +
+#  geom_vline(xintercept = mean(df_learning_banana$prop_banana),
+#             linetype = "dashed", color = "black") +
+#  labs(title = "Distribution of prop_banana",
+#       x = "prop_banana", y = "Density") +
+#  theme_minimal()#
+
+#The probability of orange and strawberry being drawn realized in the experiment calculated for each participant:
+df_learning_orange <- df_learning |> 
+  filter(button1 == "orange.svg" | button2 == "orange.svg") |> 
+  select(where(~ !all(is.na(.)))) |> 
+  group_by(id) |> 
+  mutate(n_rows = n()) |> 
+  group_by(id) |> 
+  mutate(n_orange = sum(drawn_fruit == "orange.svg"),
+         n_strawberry = sum(drawn_fruit == "strawberry.svg")) |> 
+  ungroup() |> 
+  mutate(prop_orange = n_orange / n_rows,
+         prop_strawberry = n_strawberry / n_rows) |> 
+  mutate(check = prop_orange + prop_strawberry) |> 
+  select(id, prop_orange, prop_strawberry) |> 
+  unique()
+
+#df_learning_orange |> 
+#  summarise(
+#    mean   = mean(prop_orange),
+#    sd     = sd(prop_orange),
+#    min    = min(prop_orange),
+#    max    = max(prop_orange),
+#    median = median(prop_orange)
+#  )
+#
+#ggplot(df_learning_orange, aes(x = prop_orange)) +
+#  geom_histogram(aes(y = after_stat(density)),
+#                 bins = 30, fill = "steelblue", color = "white", alpha = 0.8) +
+#  geom_density(color = "darkred", linewidth = 1) +
+#  geom_vline(xintercept = mean(df_learning_orange$prop_orange),
+#             linetype = "dashed", color = "black") +
+#  labs(title = "Distribution of prop_orange",
+#       x = "prop_orange", y = "Density") +
+#  theme_minimal()
+
+#The probability of broccoli and radish being drawn realized in the experiment calculated within participants:
+df_learning_broccoli <- df_learning |> 
+  filter(button1 == "broccoli.svg" | button2 == "broccoli.svg") |> 
+  select(where(~ !all(is.na(.)))) |> 
+  group_by(id) |> 
+  mutate(n_rows = n()) |> 
+  group_by(id) |> 
+  mutate(n_broccoli = sum(drawn_veggie == "broccoli.svg"),
+         n_radish  = sum(drawn_veggie == "raddish.svg")) |> 
+  ungroup() |> 
+  mutate(prop_broccoli = n_broccoli / n_rows,
+         prop_radish = n_radish / n_rows) |> 
+  mutate(check = prop_broccoli + prop_radish) |> 
+  select(id, prop_broccoli, prop_radish) |> 
+  unique()
+
+#df_learning_broccoli |> 
+#  summarise(
+#    mean   = mean(prop_broccoli),
+#    sd     = sd(prop_broccoli),
+#    min    = min(prop_broccoli),
+#    max    = max(prop_broccoli),
+#    median = median(prop_broccoli)
+#  )
+#
+##ggplot(df_learning_broccoli, aes(x = prop_broccoli)) +
+#  geom_histogram(aes(y = after_stat(density)),
+#                 bins = 30, fill = "steelblue", color = "white", alpha = 0.8) +
+#  geom_density(color = "darkred", linewidth = 1) +
+#  geom_vline(xintercept = mean(df_learning_broccoli$prop_broccoli),
+#             linetype = "dashed", color = "black") +
+#  labs(title = "Distribution of prop_broccoli",
+#       x = "prop_broccoli", y = "Density") +
+#  theme_minimal()
+
+#The probability of carrot and tomato being drawn realized in the experiment calculated within participants:
+df_learning_carrot <- df_learning |> 
+  filter(button1 == "carrot.svg" | button2 == "carrot.svg") |> 
+  select(where(~ !all(is.na(.)))) |> 
+  group_by(id) |> 
+  mutate(n_rows = n()) |> 
+  group_by(id) |> 
+  mutate(n_carrot = sum(drawn_veggie == "carrot.svg"),
+         n_tomato  = sum(drawn_veggie == "tomato.svg")) |> 
+  ungroup() |> 
+  mutate(prop_carrot = n_carrot / n_rows,
+         prop_tomato = n_tomato / n_rows) |> 
+  mutate(check = prop_carrot + prop_tomato) |> 
+  select(id, prop_carrot, prop_tomato) |> 
+  unique()
+
+#df_learning_carrot |> 
+#  summarise(
+#    mean   = mean(prop_carrot),
+#    sd     = sd(prop_carrot),
+#    min    = min(prop_carrot),
+#    max    = max(prop_carrot),
+#    median = median(prop_carrot)
+#  )
+#
+#ggplot(df_learning_carrot, aes(x = prop_carrot)) +
+# geom_histogram(aes(y = after_stat(density)),
+#                bins = 30, fill = "steelblue", color = "white", alpha = 0.8) +
+# geom_density(color = "darkred", linewidth = 1) +
+# geom_vline(xintercept = mean(df_learning_carrot$prop_carrot),
+#             linetype = "dashed", color = "black") +
+#  labs(title = "Distribution of prop_carrot",
+#       x = "prop_carrot", y = "Density") +
+#  theme_minimal()
+
+realized_prs <-  df_learning_broccoli |> 
+  full_join(df_learning_carrot, by = "id") |> 
+  full_join(df_learning_banana, by = "id") |> 
+  full_join(df_learning_orange, by = "id") |> 
+  select(id, realized_broccoli = prop_broccoli, realized_radish = prop_radish, 
+         realized_carrot = prop_carrot, realized_tomato = prop_tomato,
+         realized_banana = prop_banana, realized_cherry = prop_cherry,
+         realized_orange = prop_orange, realized_strawberry = prop_strawberry) |> 
+  mutate(br_box_optimal = case_when(realized_broccoli > realized_radish ~ "broccoli.svg",
+                                    realized_broccoli < realized_radish ~ "raddish.svg",
+                                    realized_broccoli == realized_radish ~ "tie",
+                                    .unmatched = "error"),
+         ct_box_optimal = case_when(realized_carrot > realized_tomato ~ "carrot.svg",
+                                    realized_carrot < realized_tomato ~ "tomato.svg",
+                                    realized_carrot == realized_tomato ~  "tie",
+                                    .unmatched = "error"),
+         bc_box_optimal = case_when(realized_banana > realized_cherry ~ "banana.svg",
+                                    realized_banana < realized_cherry ~ "cherry.svg",
+                                    realized_banana == realized_cherry ~ "tie",
+                                    .unmatched = "error"),
+         os_box_optimal = case_when(realized_orange > realized_strawberry ~ "orange.svg",
+                                    realized_orange < realized_strawberry ~ "strawberry.svg",
+                                    realized_orange == realized_strawberry ~ "tie",
+                                    .unmatched = "error")
+  ) 
+
+df_learning <- full_join(df_learning, realized_prs, by = "id")
+```
+
+2.  Prepare dataset in the long format, rename the variables and variable values, and keep only the relevant variables
+
+```{r}
+#mutate variables indicating the trial type (which type of option pair being presented) and trial order 
+df_learning <- df_learning |> 
+  arrange(id, counter_learning_fruit)  |> 
+  mutate(
+    os_box  = ((button1 == "orange.svg" & button2 == "strawberry.svg") |
+                  (button1 == "strawberry.svg" & button2 == "orange.svg")),
+    bc_box = ((button1 == "banana.svg" & button2 == "cherry.svg") | 
+      (button1 == "cherry.svg" & button2 == "banana.svg")),
+    br_box = ((button1 == "broccoli.svg" & button2 == "raddish.svg")|
+      (button1 == "raddish.svg" & button2 == "broccoli.svg")),
+    ct_box = ((button1 == "carrot.svg" & button2 == "tomato.svg")|
+                 (button1 == "tomato.svg" & button2 == "carrot.svg"))
+    ) |> 
+  filter(if_any(c(os_box, bc_box, br_box, ct_box), ~ !is.na(.x))) |>
+  group_by(id)  |> 
+  mutate(
+    os_order = if_else(os_box, cumsum(os_box), NA),
+    bc_order = if_else(bc_box, cumsum(bc_box), NA),
+    br_order = if_else(br_box, cumsum(br_box), NA),
+    ct_order = if_else(ct_box, cumsum(ct_box), NA)
+  ) |> 
+  mutate(
+   os_phase = case_when(
+     os_order %in% c(1:5) ~ 1,
+     os_order %in% c(6:10) ~ 2,
+     os_order %in% c(11:15) ~ 3,
+     os_order %in% c(16:20) ~ 4,
+     os_order %in% c(21:25) ~ 5,
+     os_order %in% c(26:30) ~ 6,
+     os_order %in% c(31:35) ~ 7,
+     os_order %in% c(36:40) ~ 8
+   ),
+   bc_phase = case_when(
+     bc_order %in% c(1:5) ~ 1,
+     bc_order %in% c(6:10) ~ 2,
+     bc_order %in% c(11:15) ~ 3,
+     bc_order %in% c(16:20) ~ 4,
+     bc_order %in% c(21:25) ~ 5,
+     bc_order %in% c(26:30) ~ 6,
+     bc_order %in% c(31:35) ~ 7,
+     bc_order %in% c(36:40) ~ 8
+   ),
+   br_phase = case_when(
+    br_order %in% c(1:5) ~ 1,
+    br_order %in% c(6:10) ~ 2,
+    br_order %in% c(11:15) ~ 3,
+    br_order %in% c(16:20) ~ 4,
+    br_order %in% c(21:25) ~ 5,
+    br_order %in% c(26:30) ~ 6,
+    br_order %in% c(31:35) ~ 7,
+    br_order %in% c(36:40) ~ 8
+   ),
+   ct_phase = case_when(
+    ct_order %in% c(1:5) ~ 1,
+    ct_order %in% c(6:10) ~ 2,
+    ct_order %in% c(11:15) ~ 3,
+    ct_order %in% c(16:20) ~ 4,
+    ct_order %in% c(21:25) ~ 5,
+    ct_order %in% c(26:30) ~ 6,
+    ct_order %in% c(31:35) ~ 7,
+    ct_order %in% c(36:40) ~ 8 
+   )
+  ) |> 
+  ungroup()
+
+#mutate a variable calculating the proportion of optimal choice within participant
+#mutate a variable calculating the proportion of A choice within participant
+df_learning_summary <- df_learning |> 
+  pivot_longer(
+    cols = ends_with("_phase"),
+    names_to = "pair_type",   # os_phase / bc_phase / ...
+    values_to = "phase",
+    values_drop_na = TRUE) |> 
+  mutate(optimal_choice = case_when(
+    pair_type == "os_phase" ~ os_box_optimal,
+    pair_type == "bc_phase" ~ bc_box_optimal,
+    pair_type == "br_phase" ~ br_box_optimal, 
+    pair_type == "ct_phase" ~ ct_box_optimal,
+    .unmatched = "error"
+  )) |> 
+  mutate(
+    # nicer labels for facets
+    pair_type = dplyr::recode(
+      pair_type,
+      "os_phase" = "A (0.50) vs not-A (0.50)",
+      "bc_phase" = "A (0.60) vs not-A (0.40)",
+      "ct_phase" = "A (0.80) vs not-A (0.20)",
+      "br_phase" = "A (0.90) vs not-A (0.10)"
+    )) |> 
+  select(id, condition, button_chosen, pair_type, phase, optimal_choice,
+         realized_A_0.90 = realized_broccoli, realized_A_0.80 = realized_carrot,
+         realized_A_0.50 = realized_orange, realized_A_0.60 = realized_banana) |> 
+  mutate(button_chosen = case_when(
+    button_chosen %in% c("strawberry.svg", "banana.svg",
+                         "carrot.svg", "broccoli.svg") ~ "A",
+    button_chosen %in% c("orange.svg", "cherry.svg",
+                         "tomato.svg", "raddish.svg" ) ~ "not-A",
+    .unmatched = "error"
+  )) |> 
+  mutate(optimal_choice = case_when(
+    optimal_choice %in% c("strawberry.svg", "banana.svg",
+                          "carrot.svg", "broccoli.svg") ~ "A",
+    optimal_choice %in% c("orange.svg", "cherry.svg",
+                          "tomato.svg", "raddish.svg" ) ~ "not-A",
+    optimal_choice == "tie" ~ "tie",
+    .unmatched = "error"
+  )) |> 
+  mutate(if_A_chosen = case_when(
+    button_chosen == "A" ~ 1,
+    button_chosen == "not-A" ~ 0,
+    .unmatched = "error"
+  )) |> 
+  mutate(
+    if_optimal = ifelse(
+      button_chosen == optimal_choice, 1, 0
+    )) |>
+  ungroup() |>
+  group_by(id, condition, pair_type, phase) |> 
+  mutate(prop_A = mean(if_A_chosen),
+         prop_optimal = mean(if_optimal)) |>
+  ungroup() |> 
+  select(id, condition, pair_type, phase, optimal_choice, prop_A, prop_optimal,
+         realized_A_0.90, realized_A_0.80, realized_A_0.60, realized_A_0.50,
+         -if_A_chosen, -if_optimal, -button_chosen) |> 
+  unique() 
+
+pair_type_levels <- c(
+  "A (0.50) vs not-A (0.50)",
+  "A (0.60) vs not-A (0.40)",
+  "A (0.80) vs not-A (0.20)",
+  "A (0.90) vs not-A (0.10)"
+)
+
+df_learning_summary <- df_learning_summary  |> 
+  mutate(pair_type = factor(pair_type, levels = pair_type_levels)) |> 
+  mutate(condition = ifelse (condition %in% c("A", "B"), "low", "high")) 
+```
+
+### Plots
+
+#### learning plot v1
+
+```{r}
+df_dist <- df_learning_summary |> 
+  distinct(id,
+           `realized_A_0.50`, `realized_A_0.60`,
+           `realized_A_0.80`, `realized_A_0.90`) |> 
+  pivot_longer(starts_with("realized_A"),
+               names_to = "pair_type", values_to = "Pr") |> 
+  mutate(
+    pair_type = recode(pair_type,
+                 "realized_A_0.50" = "A (0.50) vs not-A (0.50)",
+                 "realized_A_0.60" = "A (0.60) vs not-A (0.40)",
+                 "realized_A_0.80" = "A (0.80) vs not-A (0.20)",
+                 "realized_A_0.90" = "A (0.90) vs not-A (0.10)"),
+    pair_type = factor(pair_type, levels = pair_type_levels)
+  )
+
+
+df_dist_means <- df_dist |> 
+  group_by(pair_type) |> 
+  summarise(Pr_mean = mean(Pr), .groups = "drop")
+
+p_dist <- ggplot(df_dist, aes(x = Pr)) +
+  geom_histogram(binwidth = 0.05, boundary = 0,
+                 fill = "#D55E00", colour = "white") +
+  geom_vline(data = df_dist_means, aes(xintercept = Pr_mean),
+             colour = "black", linetype = "dashed", linewidth = 0.5) +
+  geom_text(data = df_dist_means,
+            aes(x = Pr_mean, y = Inf,
+                label = sprintf("%.2f", Pr_mean)),
+            hjust = -0.15, vjust = 1.6, size = 4) +
+  facet_grid(. ~ pair_type) +
+  scale_x_continuous(breaks = c(0, 0.25,0.5, 0.75, 1)) +
+  coord_cartesian(xlim = c(0, 1)) +
+  labs(x = "Probability of option A", y = "Number of participants") +
+  theme_classic() +
+  theme(strip.text = element_markdown(size = 12),
+        plot.tag.position = c(0, 1))  
+
+
+# learning curves ----
+p_main <- ggplot(df_learning_summary, aes(x = phase, y = prop_A)) +
+  geom_jitter(aes(colour = optimal_choice),
+              position = position_jitter(width = 0.3, height = 0.04, seed = 1),
+              shape = 1, size = 0.6, stroke = 0.3, alpha = 0.5) +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.4,
+               linewidth = 0.4, colour = "#c1272d", aes(group = 1)) +
+  stat_summary(fun = mean, geom = "line", linewidth = 0.5,
+               colour = "black", aes(group = 1)) +
+  stat_summary(fun = mean, geom = "point", size = 1.2,
+               colour = "black", aes(group = 1)) +
+  scale_colour_manual(
+    name   = "Optimal choice",
+    values = c("A" = "#D55E00", "not-A" = "#0072B2", "tie" = "#4D4D4D")) +
+  guides(colour = guide_legend(
+    override.aes = list(shape = 16, size = 3, alpha = 1))) +
+  facet_grid(condition ~ pair_type) +
+  scale_x_continuous(breaks = c(2, 4, 6, 8)) +
+  labs(x = "Phase", y = "P(Option A chosen)") +
+  theme_classic() +
+  theme(
+    strip.text.x    = element_blank(),     # pair_type labels live on the top strip, not repeated here
+    strip.text.y    = element_markdown(size=14),  # high / low on the right
+    legend.position = "bottom"
+  )
+
+# ---- stack two plots, aligned by the pair_type columns, one shared legend ----
+p_dist1 <- p_dist +
+  theme(plot.tag.position = c(0, 1.02))
+
+p_combined <- p_combined <- p_dist1 / p_main +
+  plot_layout(heights = c(1, 3), guides = "collect") +
+  plot_annotation(tag_levels = "A") &
+  theme(legend.position = "bottom") &
+  theme(
+    legend.position = "bottom",
+    axis.title.x = element_text(size = 15),   # x-labs: "Block" + "Probability of option A"
+    axis.title.y = element_text(size = 15),   # y-labs: "P(A option chosen)" + "Number of participants"
+    legend.title = element_text(size = 14),
+    legend.text  = element_text(size = 13),
+    plot.tag     = element_text(size = 16, face = "bold")
+  )  
+
+p_combined
+
+ggsave("learning_v1.pdf", width = 12, height = 8)
+```
+
+#### learning plot v2
+
+```{r}
+df_dist <- df_learning_summary |> 
+  distinct(id,
+           `realized_A_0.50`, `realized_A_0.60`,
+           `realized_A_0.80`, `realized_A_0.90`) |> 
+  pivot_longer(starts_with("realized_A"),
+               names_to = "pair_type", values_to = "Pr") |> 
+  mutate(
+    pair_type = recode(pair_type,
+                       "realized_A_0.50" = "A (0.50) vs not-A (0.50)",
+                       "realized_A_0.60" = "A (0.60) vs not-A (0.40)",
+                       "realized_A_0.80" = "A (0.80) vs not-A (0.20)",
+                       "realized_A_0.90" = "A (0.90) vs not-A (0.10)"),
+    pair_type = factor(pair_type, levels = pair_type_levels)
+  )
+
+
+df_dist_means <- df_dist |> 
+  group_by(pair_type) |> 
+  summarise(Pr_mean = mean(Pr), .groups = "drop")
+
+p_dist <- ggplot(df_dist, aes(x = Pr)) +
+  geom_histogram(binwidth = 0.05, boundary = 0,
+                 fill = "#D55E00", colour = "white") +
+  geom_vline(data = df_dist_means, aes(xintercept = Pr_mean),
+             colour = "black", linetype = "dashed", linewidth = 0.5) +
+  geom_text(data = df_dist_means,
+            aes(x = Pr_mean, y = Inf,
+                label = sprintf("%.2f", Pr_mean)),
+            hjust = -0.15, vjust = 1.6, size = 4) +
+  facet_grid(. ~ pair_type) +
+  scale_x_continuous(breaks = c(0, 0.25,0.5, 0.75, 1)) +
+  coord_cartesian(xlim = c(0, 1)) +
+  labs(x = "Probability of option A", y = "Number of participants") +
+  theme_classic() +
+  theme(strip.text = element_markdown(size = 12),
+        plot.tag.position = c(0, 1))  
+
+
+# learning curves ----
+p_main <- ggplot(df_learning_summary, aes(x = phase, y = prop_optimal)) +
+  geom_jitter(aes(colour = optimal_choice),
+              position = position_jitter(width = 0.3, height = 0.04, seed = 1),
+              shape = 1, size = 0.6, stroke = 0.3, alpha = 0.5) +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.4,
+               linewidth = 0.4, colour = "#c1272d", aes(group = 1)) +
+  stat_summary(fun = mean, geom = "line", linewidth = 0.5,
+               colour = "black", aes(group = 1)) +
+  stat_summary(fun = mean, geom = "point", size = 1.2,
+               colour = "black", aes(group = 1)) +
+  scale_colour_manual(
+    name   = "Optimal choice",
+    values = c("A" = "#D55E00", "not-A" = "#0072B2", "tie" = "#4D4D4D")) +
+  guides(colour = guide_legend(
+    override.aes = list(shape = 16, size = 3, alpha = 1))) +
+  facet_grid(condition ~ pair_type) +
+  scale_x_continuous(breaks = c(2, 4, 6, 8)) +
+  labs(x = "Phase", y = "P(Optimal option chosen)") +
+  theme_classic() +
+  theme(
+    strip.text.x    = element_blank(),     # pair_type labels live on the top strip, not repeated here
+    strip.text.y    = element_markdown(size=14),  # high / low on the right
+    legend.position = "bottom"
+  )
+
+# ---- stack two plots, aligned by the pair_type columns, one shared legend ----
+p_dist1 <- p_dist +
+  theme(plot.tag.position = c(0, 1.02))
+
+p_combined <- p_combined <- p_dist1 / p_main +
+  plot_layout(heights = c(1, 3), guides = "collect") +
+  plot_annotation(tag_levels = "A") &
+  theme(legend.position = "bottom") &
+  theme(
+    legend.position = "bottom",
+    axis.title.x = element_text(size = 15),   # x-labs: "Block" + "Probability of option A"
+    axis.title.y = element_text(size = 15),   # y-labs: "P(A option chosen)" + "Number of participants"
+    legend.title = element_text(size = 14),
+    legend.text  = element_text(size = 13),
+    plot.tag     = element_text(size = 16, face = "bold")
+  )  
+
+p_combined
+
+ggsave("learning_v2.pdf", width = 12, height = 8)
+```
+
+Learning outcomes were analyzed in small blocks (every 5 trials were grouped into one block), and were summarized with the probability of choosing the A option/proportion of A choices.
+
+### Inferential Statistics
+
+#### Stabilization
+
+```{r}
+
+
+```
+
+#### Learning acquired or not?
+
+```{r}
+
+```
+
+### Subsample based on learning outcomes
+
+##### Try out exclusion criterion 1:
+
+First, check what conditions the participant belongs to. When condition = “low", check what value the variable/column “prop_optimal” takes when “phase” = 4 and when pair types are edge paris. Only include the participants , when “pair_type” = edge types (i.e., pair_type = "A (0.90) vs not-A (0.10)" and pair_type = "A (0.80) vs not-A (0.20)" and “phase” = 4, “prop_optimal” \> 0.5. If participants belong to condition "high", check what value the variable/column “prop_optimal” takes when “phase” = 8 and when pair types are edge pairs. Only include the participant (ids) , when pair_type” = edge types and “phase” = 8, “prop_optimal” \> 0.5.
+
+```{r}
+# Qualifying participants 
+included_ids <- df_learning_summary |> 
+  # Keep only rows for edge pairs
+  filter(pair_type %in% c("A (0.90) vs not-A (0.10)", "A (0.80) vs not-A (0.20)")) |> 
+  # Keep only the relevant phase per condition
+  filter(
+    (condition == "low" & phase == 4) |
+    (condition == "high" & phase == 8)
+  ) |> 
+  # For each participant & box combination, check if prop_optimal > 0.5
+  group_by(id, pair_type) |> 
+  summarise(passes = all(prop_optimal > 0.5)) |>
+  ungroup() |> 
+  # Each participant must pass BOTH edge boxes
+  group_by(id) |> 
+  mutate(include = sum(passes)) |> 
+  filter(include == 2) #312 participants 
+
+```
+
+create subsample and save
+
+```{r create subsample and save }
+df_subsample_id <- included_ids |> 
+  pull(id) |> unique()
+
+saveRDS(df_subsample_id, "subsample_ids.rds")
+```
+
+##### Plotting sub-sample
+
+```{r}
+df_dist2 <- df_learning_summary |> 
+  filter(id %in% df_subsample_id) |> 
+  distinct(id,
+           `realized_A_0.50`, `realized_A_0.60`,
+           `realized_A_0.80`, `realized_A_0.90`) |> 
+  pivot_longer(starts_with("realized_A"),
+               names_to = "pair_type", values_to = "Pr") |> 
+  mutate(
+    pair_type = recode(pair_type,
+                       "realized_A_0.50" = "A (0.50) vs not-A (0.50)",
+                       "realized_A_0.60" = "A (0.60) vs not-A (0.40)",
+                       "realized_A_0.80" = "A (0.80) vs not-A (0.20)",
+                       "realized_A_0.90" = "A (0.90) vs not-A (0.10)"),
+    pair_type = factor(pair_type, levels = pair_type_levels)
+  )
+
+df_dist2_means <- df_dist2 |> 
+  group_by(pair_type) |> 
+  summarise(Pr_mean = mean(Pr), .groups = "drop")
+
+p_dist2 <- ggplot(df_dist2, aes(x = Pr)) +
+  geom_histogram(binwidth = 0.05, boundary = 0,
+                 fill = "#D55E00", colour = "white") +
+  geom_vline(data = df_dist2_means, aes(xintercept = Pr_mean),
+             colour = "black", linetype = "dashed", linewidth = 0.5) +
+  geom_text(data = df_dist2_means,
+            aes(x = Pr_mean, y = Inf,
+                label = sprintf("%.2f", Pr_mean)),
+            hjust = -0.15, vjust = 1.6, size = 4) +
+  facet_grid(. ~ pair_type) +
+  scale_x_continuous(breaks = c(0, 0.25,0.5, 0.75, 1)) +
+  coord_cartesian(xlim = c(0, 1)) +
+  labs(x = "Probability of option A", y = "Number of participants") +
+  theme_classic() +
+  theme(strip.text = element_markdown(size = 12),
+        plot.tag.position = c(0, 1))  
+
+
+# learning curves ----
+df_learning_summary2 <- df_learning_summary |> 
+  filter(id %in% df_subsample_id)
+
+p_main2 <- ggplot(df_learning_summary2, aes(x = phase, y = prop_A)) +
+  geom_jitter(aes(colour = optimal_choice),
+              position = position_jitter(width = 0.3, height = 0.04, seed = 1),
+              shape = 1, size = 0.6, stroke = 0.3, alpha = 0.5) +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.4,
+               linewidth = 0.4, colour = "#c1272d", aes(group = 1)) +
+  stat_summary(fun = mean, geom = "line", linewidth = 0.5,
+               colour = "black", aes(group = 1)) +
+  stat_summary(fun = mean, geom = "point", size = 1.2,
+               colour = "black", aes(group = 1)) +
+  scale_colour_manual(
+    name   = "Optimal choice",
+    values = c("A" = "#D55E00", "not-A" = "#0072B2", "tie" = "#4D4D4D")) +
+  guides(colour = guide_legend(
+    override.aes = list(shape = 16, size = 3, alpha = 1))) +
+  facet_grid(condition ~ pair_type) +
+  scale_x_continuous(breaks = c(2, 4, 6, 8)) +
+  labs(x = "Phase", y = "P(Option A chosen)") +
+  theme_classic() +
+  theme(
+    strip.text.x    = element_blank(),     # pair_type labels live on the top strip, not repeated here
+    strip.text.y    = element_markdown(size=14),  # high / low on the right
+    legend.position = "bottom"
+  )
+
+# ---- stack two plots, aligned by the pair_type columns, one shared legend ----
+p1 <- p_dist2 +
+  theme(plot.tag.position = c(0, 1.02))
+
+p_combined <- p_combined <- p1 / p_main2 +
+  plot_layout(heights = c(1, 3), guides = "collect") +
+  plot_annotation(tag_levels = "A") &
+  theme(legend.position = "bottom") &
+  theme(
+    legend.position = "bottom",
+    axis.title.x = element_text(size = 15),   # x-labs: "Block" + "Probability of option A"
+    axis.title.y = element_text(size = 15),   # y-labs: "P(A option chosen)" + "Number of participants"
+    legend.title = element_text(size = 14),
+    legend.text  = element_text(size = 13),
+    plot.tag     = element_text(size = 16, face = "bold")
+  )  
+
+p_combined
+```
