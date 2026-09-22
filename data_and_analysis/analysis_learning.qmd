@@ -27,13 +27,15 @@ df_learning <- read.csv("data_learning.csv")
 
 ### Wiki
 
-Cherry and banana are a pair of alternatives: cherry (coded as "A" in the judgment phase data) and banana (coded as "B" in the judgment phase data) are both from Box A, each having an averaged probability of 0.6 and 0.4, respectively, averaged across participants.
+Cherry and banana are a pair of mutually exclusive items: cherry (coded as "A" in the judgment phase data) and banana (coded as "B" in the judgment phase data) are both from Box A, each having a generating probability of 0.6 and 0.4, respectively.
 
-Orange and strawberry are a pair of alternatives: orange (coded as "C" in the judgment phase data) and strawberry (coded as "D" in the judgment phase data) are both from Box B, each having an averaged probability of 0.5 and 0.5, respectively, averaged across participants.
+Orange and strawberry are a pair of mutually exclusive items: orange (coded as "C" in the judgment phase data) and strawberry (coded as "D" in the judgment phase data) are both from Box B, each having a generating probability of 0.5 and 0.5, respectively.
 
-Carrot and tomato is a pair of alternatives: carrot and tomato are both from Box C, each having a probability of 0.8 and 0.2 being drawn by design.
+Carrot and tomato are a pair of mutually exclusive items: carrot and tomato (coded as "E" and "F" respectively in the judgment phase data) are both from Box C, each having a generating probability of 0.8 and 0.2 respectively.
 
-Broccoli and radish is a pair of alternatives: broccoli and radish are both from Box D, each having a probability of 0.9 and 0.1 being drawn by design.
+Broccoli and radish are a pair of mutually exclusive items: broccoli and radish (coded as "G" and "H" respectively in the judgment phase data) are both from Box D, each having a generating probability of of 0.9 and 0.1 respectively.
+
+We always coded/represented the two events of drawing each of one pair of mutually exclusive items using the notation A, not-A.
 
 Strawberry vs Orange —\> A (0.5) v.s. not-A (0.5)
 
@@ -45,7 +47,7 @@ Broccoli versus Radish —\> A (0.9) v.s. not-A (0.1)
 
 ### Dataset preparation
 
-1\. Calculate the probability of different pairs of alternatives within participant
+1\. Calculate the realized probabilities for event pairs within participant
 
 ```{r}
 #The probability of banana and cherry being drawn realized in the experiment calculated within participants:
@@ -64,24 +66,14 @@ df_learning_banana <- df_learning |>
   select(id, prop_banana, prop_cherry) |> 
   unique()
 
-#df_learning_banana |> 
-#  summarise(
-#    mean   = mean(prop_banana),
-#    sd     = sd(prop_banana),
-#    min    = min(prop_banana),
-#    max    = max(prop_banana),
-#    median = median(prop_banana)
-#  )
-#
-#ggplot(df_learning_banana, aes(x = prop_banana)) +
-#  geom_histogram(aes(y = after_stat(density)),
-#                 bins = 30, fill = "steelblue", color = "white", alpha = 0.8) +
-#  geom_density(color = "darkred", linewidth = 1) +
-#  geom_vline(xintercept = mean(df_learning_banana$prop_banana),
-#             linetype = "dashed", color = "black") +
-#  labs(title = "Distribution of prop_banana",
-#       x = "prop_banana", y = "Density") +
-#  theme_minimal()#
+df_learning_banana |> 
+  summarise(
+    mean   = mean(prop_banana),
+    sd     = sd(prop_banana),
+    min    = min(prop_banana),
+    max    = max(prop_banana),
+    median = median(prop_banana)
+  )
 
 #The probability of orange and strawberry being drawn realized in the experiment calculated for each participant:
 df_learning_orange <- df_learning |> 
@@ -99,24 +91,15 @@ df_learning_orange <- df_learning |>
   select(id, prop_orange, prop_strawberry) |> 
   unique()
 
-#df_learning_orange |> 
-#  summarise(
-#    mean   = mean(prop_orange),
-#    sd     = sd(prop_orange),
-#    min    = min(prop_orange),
-#    max    = max(prop_orange),
-#    median = median(prop_orange)
-#  )
-#
-#ggplot(df_learning_orange, aes(x = prop_orange)) +
-#  geom_histogram(aes(y = after_stat(density)),
-#                 bins = 30, fill = "steelblue", color = "white", alpha = 0.8) +
-#  geom_density(color = "darkred", linewidth = 1) +
-#  geom_vline(xintercept = mean(df_learning_orange$prop_orange),
-#             linetype = "dashed", color = "black") +
-#  labs(title = "Distribution of prop_orange",
-#       x = "prop_orange", y = "Density") +
-#  theme_minimal()
+df_learning_orange |> 
+  summarise(
+    mean   = mean(prop_orange),
+    sd     = sd(prop_orange),
+    min    = min(prop_orange),
+    max    = max(prop_orange),
+    median = median(prop_orange)
+  )
+
 
 #The probability of broccoli and radish being drawn realized in the experiment calculated within participants:
 df_learning_broccoli <- df_learning |> 
@@ -134,24 +117,15 @@ df_learning_broccoli <- df_learning |>
   select(id, prop_broccoli, prop_radish) |> 
   unique()
 
-#df_learning_broccoli |> 
-#  summarise(
-#    mean   = mean(prop_broccoli),
-#    sd     = sd(prop_broccoli),
-#    min    = min(prop_broccoli),
-#    max    = max(prop_broccoli),
-#    median = median(prop_broccoli)
-#  )
-#
-##ggplot(df_learning_broccoli, aes(x = prop_broccoli)) +
-#  geom_histogram(aes(y = after_stat(density)),
-#                 bins = 30, fill = "steelblue", color = "white", alpha = 0.8) +
-#  geom_density(color = "darkred", linewidth = 1) +
-#  geom_vline(xintercept = mean(df_learning_broccoli$prop_broccoli),
-#             linetype = "dashed", color = "black") +
-#  labs(title = "Distribution of prop_broccoli",
-#       x = "prop_broccoli", y = "Density") +
-#  theme_minimal()
+df_learning_broccoli |> 
+  summarise(
+    mean   = mean(prop_broccoli),
+    sd     = sd(prop_broccoli),
+    min    = min(prop_broccoli),
+    max    = max(prop_broccoli),
+    median = median(prop_broccoli)
+  )
+
 
 #The probability of carrot and tomato being drawn realized in the experiment calculated within participants:
 df_learning_carrot <- df_learning |> 
@@ -169,25 +143,16 @@ df_learning_carrot <- df_learning |>
   select(id, prop_carrot, prop_tomato) |> 
   unique()
 
-#df_learning_carrot |> 
-#  summarise(
-#    mean   = mean(prop_carrot),
-#    sd     = sd(prop_carrot),
-#    min    = min(prop_carrot),
-#    max    = max(prop_carrot),
-#    median = median(prop_carrot)
-#  )
-#
-#ggplot(df_learning_carrot, aes(x = prop_carrot)) +
-# geom_histogram(aes(y = after_stat(density)),
-#                bins = 30, fill = "steelblue", color = "white", alpha = 0.8) +
-# geom_density(color = "darkred", linewidth = 1) +
-# geom_vline(xintercept = mean(df_learning_carrot$prop_carrot),
-#             linetype = "dashed", color = "black") +
-#  labs(title = "Distribution of prop_carrot",
-#       x = "prop_carrot", y = "Density") +
-#  theme_minimal()
+df_learning_carrot |> 
+  summarise(
+    mean   = mean(prop_carrot),
+    sd     = sd(prop_carrot),
+    min    = min(prop_carrot),
+    max    = max(prop_carrot),
+    median = median(prop_carrot)
+      )
 
+#merge the newly calculated "realized probabilities" dataset with the "df_learning" dataset
 realized_prs <-  df_learning_broccoli |> 
   full_join(df_learning_carrot, by = "id") |> 
   full_join(df_learning_banana, by = "id") |> 
@@ -360,9 +325,14 @@ df_learning_summary <- df_learning_summary  |>
 
 ### Plots
 
-#### learning plot v1
-
 ```{r}
+italic_A <- as_labeller(function(x) gsub("\\bA\\b", "*A*", x))
+
+
+condition_labels <- c("high" = "40 learning trials",
+                      "low"  = "20 learning trials")
+
+# distributions ----
 df_dist <- df_learning_summary |> 
   distinct(id,
            `realized_A_0.50`, `realized_A_0.60`,
@@ -371,13 +341,12 @@ df_dist <- df_learning_summary |>
                names_to = "pair_type", values_to = "Pr") |> 
   mutate(
     pair_type = recode(pair_type,
-                 "realized_A_0.50" = "A (0.50) vs not-A (0.50)",
-                 "realized_A_0.60" = "A (0.60) vs not-A (0.40)",
-                 "realized_A_0.80" = "A (0.80) vs not-A (0.20)",
-                 "realized_A_0.90" = "A (0.90) vs not-A (0.10)"),
+                       "realized_A_0.50" = "A (0.50) vs not-A (0.50)",
+                       "realized_A_0.60" = "A (0.60) vs not-A (0.40)",
+                       "realized_A_0.80" = "A (0.80) vs not-A (0.20)",
+                       "realized_A_0.90" = "A (0.90) vs not-A (0.10)"),
     pair_type = factor(pair_type, levels = pair_type_levels)
   )
-
 
 df_dist_means <- df_dist |> 
   group_by(pair_type) |> 
@@ -385,68 +354,66 @@ df_dist_means <- df_dist |>
 
 p_dist <- ggplot(df_dist, aes(x = Pr)) +
   geom_histogram(binwidth = 0.05, boundary = 0,
-                 fill = "#D55E00", colour = "white") +
+                 fill = "white", colour = "black") +
   geom_vline(data = df_dist_means, aes(xintercept = Pr_mean),
-             colour = "black", linetype = "dashed", linewidth = 0.5) +
+             colour = "#c1272d", linetype = "dashed", linewidth = 1) +
   geom_text(data = df_dist_means,
             aes(x = Pr_mean, y = Inf,
                 label = sprintf("%.2f", Pr_mean)),
+            colour = "#c1272d",
             hjust = -0.15, vjust = 1.6, size = 4) +
-  facet_grid(. ~ pair_type) +
-  scale_x_continuous(breaks = c(0, 0.25,0.5, 0.75, 1)) +
+  facet_grid(. ~ pair_type, labeller = labeller(pair_type = italic_A)) +
+  scale_x_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1)) +
   coord_cartesian(xlim = c(0, 1)) +
-  labs(x = "Probability of option A", y = "Number of participants") +
+  labs(x = "Probability of option *A*", y = "Number of participants") +
   theme_classic() +
   theme(strip.text = element_markdown(size = 12),
-        plot.tag.position = c(0, 1))  
+        plot.tag.position = c(0, 1.02))
 
-
-# learning curves ----
+# learning curves 
 p_main <- ggplot(df_learning_summary, aes(x = phase, y = prop_A)) +
   geom_jitter(aes(colour = optimal_choice),
               position = position_jitter(width = 0.3, height = 0.04, seed = 1),
               shape = 1, size = 0.6, stroke = 0.3, alpha = 0.5) +
   stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.4,
-               linewidth = 0.4, colour = "#c1272d", aes(group = 1)) +
+               linewidth = 0.4, colour = "black", aes(group = 1)) +
   stat_summary(fun = mean, geom = "line", linewidth = 0.5,
                colour = "black", aes(group = 1)) +
   stat_summary(fun = mean, geom = "point", size = 1.2,
                colour = "black", aes(group = 1)) +
   scale_colour_manual(
     name   = "Optimal choice",
-    values = c("A" = "#D55E00", "not-A" = "#0072B2", "tie" = "#4D4D4D")) +
+    values = c("A" = "#D55E00", "not-A" = "#0072B2", "tie" = "#4D4D4D"),
+    labels = c("A" = "*A*", "not-A" = "not-*A*", "tie" = "tie")) +
   guides(colour = guide_legend(
     override.aes = list(shape = 16, size = 3, alpha = 1))) +
-  facet_grid(condition ~ pair_type) +
+  facet_grid(condition ~ pair_type,
+             labeller = labeller(pair_type = italic_A,
+                                 condition = condition_labels)) +
   scale_x_continuous(breaks = c(2, 4, 6, 8)) +
   labs(x = "Phase", y = "P(Option A chosen)") +
   theme_classic() +
   theme(
-    strip.text.x    = element_blank(),     # pair_type labels live on the top strip, not repeated here
-    strip.text.y    = element_markdown(size=14),  # high / low on the right
-    legend.position = "bottom"
+    strip.text.x = element_markdown(size = 12),   
+    strip.text.y = element_markdown(size = 14)    
   )
 
-# ---- stack two plots, aligned by the pair_type columns, one shared legend ----
-p_dist1 <- p_dist +
-  theme(plot.tag.position = c(0, 1.02))
-
-p_combined <- p_combined <- p_dist1 / p_main +
+# stack two plots
+p_combined <- p_dist / p_main +
   plot_layout(heights = c(1, 3), guides = "collect") +
   plot_annotation(tag_levels = "A") &
-  theme(legend.position = "bottom") &
   theme(
     legend.position = "bottom",
-    axis.title.x = element_text(size = 15),   # x-labs: "Block" + "Probability of option A"
-    axis.title.y = element_text(size = 15),   # y-labs: "P(A option chosen)" + "Number of participants"
+    axis.title.x = element_markdown(size = 15),   # "Phase" + "Probability of option *A*"
+    axis.title.y = element_text(size = 15),       # "P(Option A chosen)" + "Number of participants"
     legend.title = element_text(size = 14),
-    legend.text  = element_text(size = 13),
+    legend.text  = element_markdown(size = 13),
     plot.tag     = element_text(size = 16, face = "bold")
-  )  
+  )
 
 p_combined
 
-ggsave("learning_v1.pdf", width = 12, height = 8)
+ggsave("learning.pdf", width = 12, height = 8)
 ```
 
 #### learning plot v2
@@ -474,13 +441,13 @@ df_dist_means <- df_dist |>
 
 p_dist <- ggplot(df_dist, aes(x = Pr)) +
   geom_histogram(binwidth = 0.05, boundary = 0,
-                 fill = "#D55E00", colour = "white") +
+                 fill = "white", colour = "black") +
   geom_vline(data = df_dist_means, aes(xintercept = Pr_mean),
              colour = "black", linetype = "dashed", linewidth = 0.5) +
   geom_text(data = df_dist_means,
             aes(x = Pr_mean, y = Inf,
                 label = sprintf("%.2f", Pr_mean)),
-            hjust = -0.15, vjust = 1.6, size = 4) +
+            hjust = -0.15, vjust = 1.6, size = 4, colour = "red") +
   facet_grid(. ~ pair_type) +
   scale_x_continuous(breaks = c(0, 0.25,0.5, 0.75, 1)) +
   coord_cartesian(xlim = c(0, 1)) +
