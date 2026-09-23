@@ -13,11 +13,12 @@ editor: visual
 ### R preparation
 
 ```{r}
+#| include: false
 if (!requireNamespace("pacman", quietly = TRUE)) { 
   install.packages("pacman")
 } 
 library("pacman")
-p_load(tidyverse, here, viridis, patchwork, ggtext, lme4)
+p_load(tidyverse, here, viridis, patchwork, ggtext, lme4, emmeans)
 
 
 df_learning <- read.csv("data_learning.csv")
@@ -50,6 +51,7 @@ Broccoli versus Radish —\> A (0.9) v.s. not-A (0.1)
 1\. Calculate the realized probabilities for event pairs within participant
 
 ```{r}
+#| include: false
 #The probability of banana and cherry being drawn realized in the experiment calculated within participants:
 df_learning_banana <- df_learning |> 
   filter(button1 == "banana.svg" | button2 == "banana.svg") |> 
@@ -185,9 +187,10 @@ df_learning <- full_join(df_learning, realized_prs, by = "id")
 2.  Prepare dataset in the long format, rename the variables and variable values, and keep only the relevant variables
 
 ```{r}
+#| include: false
 #mutate variables indicating the trial type (which type of option pair being presented) and trial order 
 df_learning <- df_learning |> 
-  arrange(id, counter_learning_fruit)  |> 
+  arrange(id, counter_learning_fruit, counter_learning_veggie) |> 
   mutate(
     os_box  = ((button1 == "orange.svg" & button2 == "strawberry.svg") |
                   (button1 == "strawberry.svg" & button2 == "orange.svg")),
@@ -276,7 +279,7 @@ df_learning_summary <- df_learning |>
     )) |> 
   select(id, condition, button_chosen, pair_type, phase, optimal_choice,
          realized_A_0.90 = realized_broccoli, realized_A_0.80 = realized_carrot,
-         realized_A_0.50 = realized_orange, realized_A_0.60 = realized_banana) |> 
+         realized_A_0.50 = realized_strawberry, realized_A_0.60 = realized_banana) |> 
   mutate(button_chosen = case_when(
     button_chosen %in% c("strawberry.svg", "banana.svg",
                          "carrot.svg", "broccoli.svg") ~ "A",
@@ -306,6 +309,7 @@ df_learning_summary <- df_learning |>
   mutate(prop_A = mean(if_A_chosen),
          prop_optimal = mean(if_optimal)) |>
   ungroup() |> 
+  mutate(prop_optimal = if_else(optimal_choice == "tie", NA_real_, prop_optimal)) |> 
   select(id, condition, pair_type, phase, optimal_choice, prop_A, prop_optimal,
          realized_A_0.90, realized_A_0.80, realized_A_0.60, realized_A_0.50,
          -if_A_chosen, -if_optimal, -button_chosen) |> 
@@ -321,18 +325,22 @@ pair_type_levels <- c(
 df_learning_summary <- df_learning_summary  |> 
   mutate(pair_type = factor(pair_type, levels = pair_type_levels)) |> 
   mutate(condition = ifelse (condition %in% c("A", "B"), "low", "high")) 
+
+
 ```
 
 ### Plots
 
 ```{r}
-italic_A <- as_labeller(function(x) gsub("\\bA\\b", "*A*", x))
-
+#| echo: false
+strip_format <- as_labeller(function(x) {
+  x <- gsub("\\b0\\.", ".", x)
+  gsub("\\bA\\b", "*A*", x)
+})
 
 condition_labels <- c("high" = "40 learning trials",
                       "low"  = "20 learning trials")
 
-# distributions ----
 df_dist <- df_learning_summary |> 
   distinct(id,
            `realized_A_0.50`, `realized_A_0.60`,
@@ -359,19 +367,27 @@ p_dist <- ggplot(df_dist, aes(x = Pr)) +
              colour = "#c1272d", linetype = "dashed", linewidth = 1) +
   geom_text(data = df_dist_means,
             aes(x = Pr_mean, y = Inf,
-                label = sprintf("%.2f", Pr_mean)),
+                label = sub("^0", "", sprintf("%.2f", Pr_mean))),
             colour = "#c1272d",
-            hjust = -0.15, vjust = 1.6, size = 4) +
-  facet_grid(. ~ pair_type, labeller = labeller(pair_type = italic_A)) +
+            hjust = 1.5, vjust = 1.6, size = 4) + 
+  facet_grid(. ~ pair_type, labeller = labeller(pair_type = strip_format)) +
   scale_x_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1)) +
   coord_cartesian(xlim = c(0, 1)) +
-  labs(x = "Probability of option *A*", y = "Number of participants") +
+  labs(x = "Realized probability of event *A*", y = "Number of participants") +
   theme_classic() +
   theme(strip.text = element_markdown(size = 12),
         plot.tag.position = c(0, 1.02))
 
+# reference line at p(A) for each pair type 
+df_ref <- tibble(
+  pair_type = factor(pair_type_levels, levels = pair_type_levels),
+  p_A       = c(0.50, 0.60, 0.80, 0.90)
+)
+
 # learning curves 
 p_main <- ggplot(df_learning_summary, aes(x = phase, y = prop_A)) +
+  geom_hline(data = df_ref, aes(yintercept = p_A),
+             colour = "grey50", linetype = "dashed", linewidth = 0.4) +
   geom_jitter(aes(colour = optimal_choice),
               position = position_jitter(width = 0.3, height = 0.04, seed = 1),
               shape = 1, size = 0.6, stroke = 0.3, alpha = 0.5) +
@@ -382,30 +398,30 @@ p_main <- ggplot(df_learning_summary, aes(x = phase, y = prop_A)) +
   stat_summary(fun = mean, geom = "point", size = 1.2,
                colour = "black", aes(group = 1)) +
   scale_colour_manual(
-    name   = "Optimal choice",
+    name   = "Event with higher realized probability",
     values = c("A" = "#D55E00", "not-A" = "#0072B2", "tie" = "#4D4D4D"),
     labels = c("A" = "*A*", "not-A" = "not-*A*", "tie" = "tie")) +
   guides(colour = guide_legend(
     override.aes = list(shape = 16, size = 3, alpha = 1))) +
   facet_grid(condition ~ pair_type,
-             labeller = labeller(pair_type = italic_A,
+             labeller = labeller(pair_type = strip_format,
                                  condition = condition_labels)) +
   scale_x_continuous(breaks = c(2, 4, 6, 8)) +
-  labs(x = "Phase", y = "P(Option A chosen)") +
+  labs(x = "Trial bin", y = "Proportion predicting *A*") +
   theme_classic() +
   theme(
     strip.text.x = element_markdown(size = 12),   
     strip.text.y = element_markdown(size = 14)    
   )
 
-# stack two plots
+# stack two plots, aligned by the pair_type columns
 p_combined <- p_dist / p_main +
   plot_layout(heights = c(1, 3), guides = "collect") +
   plot_annotation(tag_levels = "A") &
   theme(
     legend.position = "bottom",
-    axis.title.x = element_markdown(size = 15),   # "Phase" + "Probability of option *A*"
-    axis.title.y = element_text(size = 15),       # "P(Option A chosen)" + "Number of participants"
+    axis.title.x = element_markdown(size = 15),   
+    axis.title.y = element_markdown(size = 15),      
     legend.title = element_text(size = 14),
     legend.text  = element_markdown(size = 13),
     plot.tag     = element_text(size = 16, face = "bold")
@@ -416,119 +432,99 @@ p_combined
 ggsave("learning.pdf", width = 12, height = 8)
 ```
 
-#### learning plot v2
+### Inferential statistics
 
-```{r}
-df_dist <- df_learning_summary |> 
-  distinct(id,
-           `realized_A_0.50`, `realized_A_0.60`,
-           `realized_A_0.80`, `realized_A_0.90`) |> 
-  pivot_longer(starts_with("realized_A"),
-               names_to = "pair_type", values_to = "Pr") |> 
+We define sucessful learning as sensitivity to experienced frequency: If participants learned, then the more often *A* actually occurred for a given participant, the more often they should predict *A*.
+
+```{r Prepare bin-level df_learning data frame}
+item_A <- c(A60 = "banana", A50 = "strawberry", A80 = "carrot", A90 = "broccoli")
+
+df_learning2 <- df_learning |>
+  mutate(id = factor(id)) |> 
   mutate(
-    pair_type = recode(pair_type,
-                       "realized_A_0.50" = "A (0.50) vs not-A (0.50)",
-                       "realized_A_0.60" = "A (0.60) vs not-A (0.40)",
-                       "realized_A_0.80" = "A (0.80) vs not-A (0.20)",
-                       "realized_A_0.90" = "A (0.90) vs not-A (0.10)"),
-    pair_type = factor(pair_type, levels = pair_type_levels)
+    pair  = case_when(bc_box ~ "A60", os_box ~ "A50", ct_box ~ "A80", br_box ~ "A90"),
+    trial = case_when(pair == "A60" ~ bc_order, pair == "A50" ~ os_order,
+                      pair == "A80" ~ ct_order, pair == "A90" ~ br_order),
+    bin   = case_when(pair == "A60" ~ bc_phase, pair == "A50" ~ os_phase,
+                      pair == "A80" ~ ct_phase, pair == "A90" ~ br_phase),
+    drawn     = coalesce(drawn_fruit, drawn_veggie),
+    A_item    = item_A[pair],
+    predict_A = as.integer(str_remove(button_chosen, "\\.svg$") == A_item), #1 = event A and 0 = not-A
+    outcome_A = as.integer(str_remove(drawn,         "\\.svg$") == A_item), #1 = event A and 0 = not-A
+    condition = factor(if_else(condition %in% c("A", "B"), "20", "40"), levels = c("20", "40")),
+    pair = factor(pair, levels = c("A50", "A60", "A80", "A90"))
+  ) |> 
+  select(id, condition, pair, trial, bin, drawn, A_item, predict_A, outcome_A) |> 
+  group_by(id, pair) |>  
+  mutate(realized_pA   = mean(outcome_A)) |> 
+  ungroup() |>
+  mutate(rpA10    = (realized_pA   - .5) * 10,   # unit = .10, 0 at .50
+  ) 
+
+df_learning_bin <- df_learning2 |>
+  group_by(id, condition, pair, bin) |>
+  summarise(
+    k = sum(predict_A),
+    n = n(),
+    rpA10 = first(rpA10),
+    .groups = "drop"
   )
-
-
-df_dist_means <- df_dist |> 
-  group_by(pair_type) |> 
-  summarise(Pr_mean = mean(Pr), .groups = "drop")
-
-p_dist <- ggplot(df_dist, aes(x = Pr)) +
-  geom_histogram(binwidth = 0.05, boundary = 0,
-                 fill = "white", colour = "black") +
-  geom_vline(data = df_dist_means, aes(xintercept = Pr_mean),
-             colour = "black", linetype = "dashed", linewidth = 0.5) +
-  geom_text(data = df_dist_means,
-            aes(x = Pr_mean, y = Inf,
-                label = sprintf("%.2f", Pr_mean)),
-            hjust = -0.15, vjust = 1.6, size = 4, colour = "red") +
-  facet_grid(. ~ pair_type) +
-  scale_x_continuous(breaks = c(0, 0.25,0.5, 0.75, 1)) +
-  coord_cartesian(xlim = c(0, 1)) +
-  labs(x = "Probability of option A", y = "Number of participants") +
-  theme_classic() +
-  theme(strip.text = element_markdown(size = 12),
-        plot.tag.position = c(0, 1))  
-
-
-# learning curves ----
-p_main <- ggplot(df_learning_summary, aes(x = phase, y = prop_optimal)) +
-  geom_jitter(aes(colour = optimal_choice),
-              position = position_jitter(width = 0.3, height = 0.04, seed = 1),
-              shape = 1, size = 0.6, stroke = 0.3, alpha = 0.5) +
-  stat_summary(fun.data = mean_se, geom = "errorbar", width = 0.4,
-               linewidth = 0.4, colour = "#c1272d", aes(group = 1)) +
-  stat_summary(fun = mean, geom = "line", linewidth = 0.5,
-               colour = "black", aes(group = 1)) +
-  stat_summary(fun = mean, geom = "point", size = 1.2,
-               colour = "black", aes(group = 1)) +
-  scale_colour_manual(
-    name   = "Optimal choice",
-    values = c("A" = "#D55E00", "not-A" = "#0072B2", "tie" = "#4D4D4D")) +
-  guides(colour = guide_legend(
-    override.aes = list(shape = 16, size = 3, alpha = 1))) +
-  facet_grid(condition ~ pair_type) +
-  scale_x_continuous(breaks = c(2, 4, 6, 8)) +
-  labs(x = "Phase", y = "P(Optimal option chosen)") +
-  theme_classic() +
-  theme(
-    strip.text.x    = element_blank(),     # pair_type labels live on the top strip, not repeated here
-    strip.text.y    = element_markdown(size=14),  # high / low on the right
-    legend.position = "bottom"
-  )
-
-# ---- stack two plots, aligned by the pair_type columns, one shared legend ----
-p_dist1 <- p_dist +
-  theme(plot.tag.position = c(0, 1.02))
-
-p_combined <- p_combined <- p_dist1 / p_main +
-  plot_layout(heights = c(1, 3), guides = "collect") +
-  plot_annotation(tag_levels = "A") &
-  theme(legend.position = "bottom") &
-  theme(
-    legend.position = "bottom",
-    axis.title.x = element_text(size = 15),   # x-labs: "Block" + "Probability of option A"
-    axis.title.y = element_text(size = 15),   # y-labs: "P(A option chosen)" + "Number of participants"
-    legend.title = element_text(size = 14),
-    legend.text  = element_text(size = 13),
-    plot.tag     = element_text(size = 16, face = "bold")
-  )  
-
-p_combined
-
-ggsave("learning_v2.pdf", width = 12, height = 8)
 ```
 
-Learning outcomes were analyzed in small blocks (every 5 trials were grouped into one block), and were summarized with the probability of choosing the A option/proportion of A choices.
+```{r mixed model analysis}
+ctrl <- glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 2e5))
 
-### Inferential Statistics
+fit_group <- function(cond) {
+  dg <- df_learning_bin |> filter(condition == cond)
+  # learning test: does sensitivity change across bins? (bin as factor, no linearity assumption)
+  m  <- glmer(cbind(k, n - k) ~ rpA10 * factor(bin) + (1 + rpA10 | id),
+              data = dg, family = binomial, control = ctrl)
+  m0 <- glmer(cbind(k, n - k) ~ rpA10 + factor(bin) + (1 + rpA10 | id),
+              data = dg, family = binomial, control = ctrl)
+  cat("\n==== condition", cond, "====\n")
+  print(anova(m0, m))                                   # Q1: learning occurred?
+  st <- emtrends(m, ~ bin, var = "rpA10")               # per-bin slope
+  print(summary(st, infer = TRUE))
+  print(contrast(st, "consec"))                         # Q2: which bin-to-bin jumps are ~0 = plateau
+}
 
-#### Stabilization
 
-```{r}
-
-
+fit_group("20")
+fit_group("40")
 ```
 
-#### Learning acquired or not?
+```{r }
+df_cum <- df_learning2 |>
+  arrange(id, pair, trial) |>
+  group_by(id, pair) |>
+  mutate(run_pA = dplyr::lag(cummean(outcome_A))) |>   # frequency seen BEFORE this trial
+  ungroup() |>
+  filter(!is.na(run_pA)) |>                            # drop trial 1
+  mutate(runpA10 = (run_pA - .5) * 10)
 
-```{r}
+df_cum_bin <- df_cum |>
+  group_by(id, condition, pair, bin) |>
+  summarise(k = sum(predict_A), n = n(),
+            runpA10 = mean(runpA10), .groups = "drop")   # mean running-freq within bin
 
+fit_cum <- function(cond) {
+  dg <- df_cum_bin |> filter(condition == cond)
+  m  <- glmer(cbind(k, n - k) ~ runpA10 * factor(bin) + (1 + runpA10 | id),
+              data = dg, family = binomial, control = ctrl)
+  m0 <- glmer(cbind(k, n - k) ~ runpA10 + factor(bin) + (1 + runpA10 | id),
+              data = dg, family = binomial, control = ctrl)
+  cat("\n==== cumulative, condition", cond, "====\n")
+  print(anova(m0, m))
+  print(summary(emtrends(m, ~ bin, var = "runpA10"), infer = TRUE))
+  print(contrast(emtrends(m, ~ bin, var = "runpA10"), "consec"))
+}
+fit_cum("20")
+
+fit_cum("40")
 ```
 
-### Subsample based on learning outcomes
-
-##### Try out exclusion criterion 1:
-
-First, check what conditions the participant belongs to. When condition = “low", check what value the variable/column “prop_optimal” takes when “phase” = 4 and when pair types are edge paris. Only include the participants , when “pair_type” = edge types (i.e., pair_type = "A (0.90) vs not-A (0.10)" and pair_type = "A (0.80) vs not-A (0.20)" and “phase” = 4, “prop_optimal” \> 0.5. If participants belong to condition "high", check what value the variable/column “prop_optimal” takes when “phase” = 8 and when pair types are edge pairs. Only include the participant (ids) , when pair_type” = edge types and “phase” = 8, “prop_optimal” \> 0.5.
-
 ```{r}
+#| include: false
 # Qualifying participants 
 included_ids <- df_learning_summary |> 
   # Keep only rows for edge pairs
@@ -551,7 +547,8 @@ included_ids <- df_learning_summary |>
 
 create subsample and save
 
-```{r create subsample and save }
+```{r create subsample and save}
+#| include: false
 df_subsample_id <- included_ids |> 
   pull(id) |> unique()
 
@@ -561,6 +558,7 @@ saveRDS(df_subsample_id, "subsample_ids.rds")
 ##### Plotting sub-sample
 
 ```{r}
+#| include: false
 df_dist2 <- df_learning_summary |> 
   filter(id %in% df_subsample_id) |> 
   distinct(id,
