@@ -2211,10 +2211,8 @@ vertical-align: -.125em;
   <li><a href="#wiki" id="toc-wiki" class="nav-link" data-scroll-target="#wiki">Wiki</a></li>
   <li><a href="#dataset-preparation" id="toc-dataset-preparation" class="nav-link" data-scroll-target="#dataset-preparation">Dataset preparation</a></li>
   <li><a href="#plots" id="toc-plots" class="nav-link" data-scroll-target="#plots">Plots</a></li>
-  <li><a href="#inferential-statistics" id="toc-inferential-statistics" class="nav-link" data-scroll-target="#inferential-statistics">Inferential statistics</a>
-  <ul>
-  <li><a href="#plotting-sub-sample" id="toc-plotting-sub-sample" class="nav-link" data-scroll-target="#plotting-sub-sample">Plotting sub-sample</a></li>
-  </ul></li>
+  <li><a href="#inferential-statistics" id="toc-inferential-statistics" class="nav-link" data-scroll-target="#inferential-statistics">Inferential statistics</a></li>
+  <li><a href="#subsample-preparation-for-robustness-analysis" id="toc-subsample-preparation-for-robustness-analysis" class="nav-link" data-scroll-target="#subsample-preparation-for-robustness-analysis">Subsample preparation for robustness analysis</a></li>
   </ul>
 </nav>
 </div>
@@ -2243,7 +2241,17 @@ vertical-align: -.125em;
 
 <section id="r-preparation" class="level3">
 <h3 class="anchored" data-anchor-id="r-preparation">R preparation</h3>
-<p><strong><em>The goal of analyzing the learning-phase data is to evaluate the learning outcomes and prepare subsamples for robustness analysis.</em></strong></p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">requireNamespace</span>(<span class="st">&quot;pacman&quot;</span>, <span class="at">quietly =</span> <span class="cn">TRUE</span>)) { </span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">install.packages</span>(<span class="st">&quot;pacman&quot;</span>)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>} </span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(<span class="st">&quot;pacman&quot;</span>)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">p_load</span>(tidyverse, here, viridis, patchwork, ggtext, lme4, emmeans)</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>df_learning <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">&quot;data_learning.csv&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong><em>The goal of analyzing the learning-phase data is to evaluate the learning outcomes and prepare a subsample for robustness analysis.</em></strong></p>
 </section>
 <section id="wiki" class="level3">
 <h3 class="anchored" data-anchor-id="wiki">Wiki</h3>
@@ -2260,13 +2268,397 @@ vertical-align: -.125em;
 <section id="dataset-preparation" class="level3">
 <h3 class="anchored" data-anchor-id="dataset-preparation">Dataset preparation</h3>
 <p>1. Calculate the realized probabilities for event pairs within participant</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">#The probability of banana and cherry being drawn realized in the experiment calculated within participants:</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>df_learning_banana <span class="ot">&lt;-</span> df_learning <span class="sc">|&gt;</span> </span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(button1 <span class="sc">==</span> <span class="st">&quot;banana.svg&quot;</span> <span class="sc">|</span> button2 <span class="sc">==</span> <span class="st">&quot;banana.svg&quot;</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="fu">where</span>(<span class="sc">~</span> <span class="sc">!</span><span class="fu">all</span>(<span class="fu">is.na</span>(.)))) <span class="sc">|&gt;</span> </span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id) <span class="sc">|&gt;</span> </span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">n_rows =</span> <span class="fu">n</span>()) <span class="sc">|&gt;</span> </span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id) <span class="sc">|&gt;</span> </span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">n_banana =</span> <span class="fu">sum</span>(drawn_fruit <span class="sc">==</span> <span class="st">&quot;banana.svg&quot;</span>),</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>         <span class="at">n_cherry =</span> <span class="fu">sum</span>(drawn_fruit <span class="sc">==</span> <span class="st">&quot;cherry.svg&quot;</span>)) <span class="sc">|&gt;</span> </span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">prop_banana =</span> n_banana <span class="sc">/</span> n_rows,</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>         <span class="at">prop_cherry =</span> n_cherry <span class="sc">/</span> n_rows) <span class="sc">|&gt;</span> </span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">check =</span> prop_banana <span class="sc">+</span> prop_cherry) <span class="sc">|&gt;</span> </span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(id, prop_banana, prop_cherry) <span class="sc">|&gt;</span> </span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unique</span>()</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>df_learning_banana <span class="sc">|&gt;</span> </span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean   =</span> <span class="fu">mean</span>(prop_banana),</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd     =</span> <span class="fu">sd</span>(prop_banana),</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">min    =</span> <span class="fu">min</span>(prop_banana),</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">max    =</span> <span class="fu">max</span>(prop_banana),</span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">median =</span> <span class="fu">median</span>(prop_banana)</span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 1 × 5
+   mean     sd   min   max median
+  &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;  &lt;dbl&gt;
+1 0.601 0.0917   0.3   0.9    0.6</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">#The probability of orange and strawberry being drawn realized in the experiment calculated for each participant:</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>df_learning_orange <span class="ot">&lt;-</span> df_learning <span class="sc">|&gt;</span> </span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(button1 <span class="sc">==</span> <span class="st">&quot;orange.svg&quot;</span> <span class="sc">|</span> button2 <span class="sc">==</span> <span class="st">&quot;orange.svg&quot;</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="fu">where</span>(<span class="sc">~</span> <span class="sc">!</span><span class="fu">all</span>(<span class="fu">is.na</span>(.)))) <span class="sc">|&gt;</span> </span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id) <span class="sc">|&gt;</span> </span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">n_rows =</span> <span class="fu">n</span>()) <span class="sc">|&gt;</span> </span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id) <span class="sc">|&gt;</span> </span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">n_orange =</span> <span class="fu">sum</span>(drawn_fruit <span class="sc">==</span> <span class="st">&quot;orange.svg&quot;</span>),</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>         <span class="at">n_strawberry =</span> <span class="fu">sum</span>(drawn_fruit <span class="sc">==</span> <span class="st">&quot;strawberry.svg&quot;</span>)) <span class="sc">|&gt;</span> </span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">prop_orange =</span> n_orange <span class="sc">/</span> n_rows,</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>         <span class="at">prop_strawberry =</span> n_strawberry <span class="sc">/</span> n_rows) <span class="sc">|&gt;</span> </span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">check =</span> prop_orange <span class="sc">+</span> prop_strawberry) <span class="sc">|&gt;</span> </span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(id, prop_orange, prop_strawberry) <span class="sc">|&gt;</span> </span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unique</span>()</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>df_learning_orange <span class="sc">|&gt;</span> </span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean   =</span> <span class="fu">mean</span>(prop_orange),</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd     =</span> <span class="fu">sd</span>(prop_orange),</span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">min    =</span> <span class="fu">min</span>(prop_orange),</span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">max    =</span> <span class="fu">max</span>(prop_orange),</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">median =</span> <span class="fu">median</span>(prop_orange)</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 1 × 5
+   mean     sd   min   max median
+  &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;  &lt;dbl&gt;
+1 0.499 0.0957   0.2  0.85    0.5</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">#The probability of broccoli and radish being drawn realized in the experiment calculated within participants:</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>df_learning_broccoli <span class="ot">&lt;-</span> df_learning <span class="sc">|&gt;</span> </span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(button1 <span class="sc">==</span> <span class="st">&quot;broccoli.svg&quot;</span> <span class="sc">|</span> button2 <span class="sc">==</span> <span class="st">&quot;broccoli.svg&quot;</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="fu">where</span>(<span class="sc">~</span> <span class="sc">!</span><span class="fu">all</span>(<span class="fu">is.na</span>(.)))) <span class="sc">|&gt;</span> </span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id) <span class="sc">|&gt;</span> </span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">n_rows =</span> <span class="fu">n</span>()) <span class="sc">|&gt;</span> </span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id) <span class="sc">|&gt;</span> </span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">n_broccoli =</span> <span class="fu">sum</span>(drawn_veggie <span class="sc">==</span> <span class="st">&quot;broccoli.svg&quot;</span>),</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>         <span class="at">n_radish  =</span> <span class="fu">sum</span>(drawn_veggie <span class="sc">==</span> <span class="st">&quot;raddish.svg&quot;</span>)) <span class="sc">|&gt;</span> </span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">prop_broccoli =</span> n_broccoli <span class="sc">/</span> n_rows,</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>         <span class="at">prop_radish =</span> n_radish <span class="sc">/</span> n_rows) <span class="sc">|&gt;</span> </span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">check =</span> prop_broccoli <span class="sc">+</span> prop_radish) <span class="sc">|&gt;</span> </span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(id, prop_broccoli, prop_radish) <span class="sc">|&gt;</span> </span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unique</span>()</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>df_learning_broccoli <span class="sc">|&gt;</span> </span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean   =</span> <span class="fu">mean</span>(prop_broccoli),</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd     =</span> <span class="fu">sd</span>(prop_broccoli),</span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">min    =</span> <span class="fu">min</span>(prop_broccoli),</span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">max    =</span> <span class="fu">max</span>(prop_broccoli),</span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">median =</span> <span class="fu">median</span>(prop_broccoli)</span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 1 × 5
+   mean     sd   min   max median
+  &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;  &lt;dbl&gt;
+1 0.900 0.0594   0.7     1    0.9</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co">#The probability of carrot and tomato being drawn realized in the experiment calculated within participants:</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>df_learning_carrot <span class="ot">&lt;-</span> df_learning <span class="sc">|&gt;</span> </span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(button1 <span class="sc">==</span> <span class="st">&quot;carrot.svg&quot;</span> <span class="sc">|</span> button2 <span class="sc">==</span> <span class="st">&quot;carrot.svg&quot;</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="fu">where</span>(<span class="sc">~</span> <span class="sc">!</span><span class="fu">all</span>(<span class="fu">is.na</span>(.)))) <span class="sc">|&gt;</span> </span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id) <span class="sc">|&gt;</span> </span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">n_rows =</span> <span class="fu">n</span>()) <span class="sc">|&gt;</span> </span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id) <span class="sc">|&gt;</span> </span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">n_carrot =</span> <span class="fu">sum</span>(drawn_veggie <span class="sc">==</span> <span class="st">&quot;carrot.svg&quot;</span>),</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>         <span class="at">n_tomato  =</span> <span class="fu">sum</span>(drawn_veggie <span class="sc">==</span> <span class="st">&quot;tomato.svg&quot;</span>)) <span class="sc">|&gt;</span> </span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">prop_carrot =</span> n_carrot <span class="sc">/</span> n_rows,</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>         <span class="at">prop_tomato =</span> n_tomato <span class="sc">/</span> n_rows) <span class="sc">|&gt;</span> </span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">check =</span> prop_carrot <span class="sc">+</span> prop_tomato) <span class="sc">|&gt;</span> </span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(id, prop_carrot, prop_tomato) <span class="sc">|&gt;</span> </span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unique</span>()</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>df_learning_carrot <span class="sc">|&gt;</span> </span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean   =</span> <span class="fu">mean</span>(prop_carrot),</span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">sd     =</span> <span class="fu">sd</span>(prop_carrot),</span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">min    =</span> <span class="fu">min</span>(prop_carrot),</span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">max    =</span> <span class="fu">max</span>(prop_carrot),</span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">median =</span> <span class="fu">median</span>(prop_carrot)</span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>      )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 1 × 5
+   mean     sd   min   max median
+  &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;  &lt;dbl&gt;
+1 0.795 0.0783   0.5     1    0.8</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co">#merge the newly calculated &quot;realized probabilities&quot; dataset with the &quot;df_learning&quot; dataset</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>realized_prs <span class="ot">&lt;-</span>  df_learning_broccoli <span class="sc">|&gt;</span> </span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">full_join</span>(df_learning_carrot, <span class="at">by =</span> <span class="st">&quot;id&quot;</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">full_join</span>(df_learning_banana, <span class="at">by =</span> <span class="st">&quot;id&quot;</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">full_join</span>(df_learning_orange, <span class="at">by =</span> <span class="st">&quot;id&quot;</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(id, <span class="at">realized_broccoli =</span> prop_broccoli, <span class="at">realized_radish =</span> prop_radish, </span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>         <span class="at">realized_carrot =</span> prop_carrot, <span class="at">realized_tomato =</span> prop_tomato,</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>         <span class="at">realized_banana =</span> prop_banana, <span class="at">realized_cherry =</span> prop_cherry,</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>         <span class="at">realized_orange =</span> prop_orange, <span class="at">realized_strawberry =</span> prop_strawberry) <span class="sc">|&gt;</span> </span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">br_box_optimal =</span> <span class="fu">case_when</span>(realized_broccoli <span class="sc">&gt;</span> realized_radish <span class="sc">~</span> <span class="st">&quot;broccoli.svg&quot;</span>,</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>                                    realized_broccoli <span class="sc">&lt;</span> realized_radish <span class="sc">~</span> <span class="st">&quot;raddish.svg&quot;</span>,</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>                                    realized_broccoli <span class="sc">==</span> realized_radish <span class="sc">~</span> <span class="st">&quot;tie&quot;</span>,</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>                                    <span class="at">.unmatched =</span> <span class="st">&quot;error&quot;</span>),</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>         <span class="at">ct_box_optimal =</span> <span class="fu">case_when</span>(realized_carrot <span class="sc">&gt;</span> realized_tomato <span class="sc">~</span> <span class="st">&quot;carrot.svg&quot;</span>,</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>                                    realized_carrot <span class="sc">&lt;</span> realized_tomato <span class="sc">~</span> <span class="st">&quot;tomato.svg&quot;</span>,</span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>                                    realized_carrot <span class="sc">==</span> realized_tomato <span class="sc">~</span>  <span class="st">&quot;tie&quot;</span>,</span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>                                    <span class="at">.unmatched =</span> <span class="st">&quot;error&quot;</span>),</span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>         <span class="at">bc_box_optimal =</span> <span class="fu">case_when</span>(realized_banana <span class="sc">&gt;</span> realized_cherry <span class="sc">~</span> <span class="st">&quot;banana.svg&quot;</span>,</span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>                                    realized_banana <span class="sc">&lt;</span> realized_cherry <span class="sc">~</span> <span class="st">&quot;cherry.svg&quot;</span>,</span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>                                    realized_banana <span class="sc">==</span> realized_cherry <span class="sc">~</span> <span class="st">&quot;tie&quot;</span>,</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>                                    <span class="at">.unmatched =</span> <span class="st">&quot;error&quot;</span>),</span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>         <span class="at">os_box_optimal =</span> <span class="fu">case_when</span>(realized_orange <span class="sc">&gt;</span> realized_strawberry <span class="sc">~</span> <span class="st">&quot;orange.svg&quot;</span>,</span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>                                    realized_orange <span class="sc">&lt;</span> realized_strawberry <span class="sc">~</span> <span class="st">&quot;strawberry.svg&quot;</span>,</span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>                                    realized_orange <span class="sc">==</span> realized_strawberry <span class="sc">~</span> <span class="st">&quot;tie&quot;</span>,</span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>                                    <span class="at">.unmatched =</span> <span class="st">&quot;error&quot;</span>)</span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>  ) </span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>df_learning <span class="ot">&lt;-</span> <span class="fu">full_join</span>(df_learning, realized_prs, <span class="at">by =</span> <span class="st">&quot;id&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
 <ol start="2" type="1">
 <li>Prepare dataset in the long format, rename the variables and variable values, and keep only the relevant variables</li>
 </ol>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co">#mutate variables indicating the trial type (which type of option pair being presented) and trial order </span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>df_learning <span class="ot">&lt;-</span> df_learning <span class="sc">|&gt;</span> </span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(id, counter_learning_fruit, counter_learning_veggie) <span class="sc">|&gt;</span> </span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">os_box  =</span> ((button1 <span class="sc">==</span> <span class="st">&quot;orange.svg&quot;</span> <span class="sc">&amp;</span> button2 <span class="sc">==</span> <span class="st">&quot;strawberry.svg&quot;</span>) <span class="sc">|</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>                  (button1 <span class="sc">==</span> <span class="st">&quot;strawberry.svg&quot;</span> <span class="sc">&amp;</span> button2 <span class="sc">==</span> <span class="st">&quot;orange.svg&quot;</span>)),</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">bc_box =</span> ((button1 <span class="sc">==</span> <span class="st">&quot;banana.svg&quot;</span> <span class="sc">&amp;</span> button2 <span class="sc">==</span> <span class="st">&quot;cherry.svg&quot;</span>) <span class="sc">|</span> </span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>      (button1 <span class="sc">==</span> <span class="st">&quot;cherry.svg&quot;</span> <span class="sc">&amp;</span> button2 <span class="sc">==</span> <span class="st">&quot;banana.svg&quot;</span>)),</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">br_box =</span> ((button1 <span class="sc">==</span> <span class="st">&quot;broccoli.svg&quot;</span> <span class="sc">&amp;</span> button2 <span class="sc">==</span> <span class="st">&quot;raddish.svg&quot;</span>)<span class="sc">|</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>      (button1 <span class="sc">==</span> <span class="st">&quot;raddish.svg&quot;</span> <span class="sc">&amp;</span> button2 <span class="sc">==</span> <span class="st">&quot;broccoli.svg&quot;</span>)),</span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">ct_box =</span> ((button1 <span class="sc">==</span> <span class="st">&quot;carrot.svg&quot;</span> <span class="sc">&amp;</span> button2 <span class="sc">==</span> <span class="st">&quot;tomato.svg&quot;</span>)<span class="sc">|</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>                 (button1 <span class="sc">==</span> <span class="st">&quot;tomato.svg&quot;</span> <span class="sc">&amp;</span> button2 <span class="sc">==</span> <span class="st">&quot;carrot.svg&quot;</span>))</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">|&gt;</span> </span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">if_any</span>(<span class="fu">c</span>(os_box, bc_box, br_box, ct_box), <span class="sc">~</span> <span class="sc">!</span><span class="fu">is.na</span>(.x))) <span class="sc">|&gt;</span></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id)  <span class="sc">|&gt;</span> </span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">os_order =</span> <span class="fu">if_else</span>(os_box, <span class="fu">cumsum</span>(os_box), <span class="cn">NA</span>),</span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">bc_order =</span> <span class="fu">if_else</span>(bc_box, <span class="fu">cumsum</span>(bc_box), <span class="cn">NA</span>),</span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">br_order =</span> <span class="fu">if_else</span>(br_box, <span class="fu">cumsum</span>(br_box), <span class="cn">NA</span>),</span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">ct_order =</span> <span class="fu">if_else</span>(ct_box, <span class="fu">cumsum</span>(ct_box), <span class="cn">NA</span>)</span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span> </span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>   <span class="at">os_phase =</span> <span class="fu">case_when</span>(</span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>     os_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>) <span class="sc">~</span> <span class="dv">1</span>,</span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>     os_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">6</span><span class="sc">:</span><span class="dv">10</span>) <span class="sc">~</span> <span class="dv">2</span>,</span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a>     os_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">11</span><span class="sc">:</span><span class="dv">15</span>) <span class="sc">~</span> <span class="dv">3</span>,</span>
+<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a>     os_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">16</span><span class="sc">:</span><span class="dv">20</span>) <span class="sc">~</span> <span class="dv">4</span>,</span>
+<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a>     os_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">21</span><span class="sc">:</span><span class="dv">25</span>) <span class="sc">~</span> <span class="dv">5</span>,</span>
+<span id="cb11-29"><a href="#cb11-29" aria-hidden="true" tabindex="-1"></a>     os_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">26</span><span class="sc">:</span><span class="dv">30</span>) <span class="sc">~</span> <span class="dv">6</span>,</span>
+<span id="cb11-30"><a href="#cb11-30" aria-hidden="true" tabindex="-1"></a>     os_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">31</span><span class="sc">:</span><span class="dv">35</span>) <span class="sc">~</span> <span class="dv">7</span>,</span>
+<span id="cb11-31"><a href="#cb11-31" aria-hidden="true" tabindex="-1"></a>     os_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">36</span><span class="sc">:</span><span class="dv">40</span>) <span class="sc">~</span> <span class="dv">8</span></span>
+<span id="cb11-32"><a href="#cb11-32" aria-hidden="true" tabindex="-1"></a>   ),</span>
+<span id="cb11-33"><a href="#cb11-33" aria-hidden="true" tabindex="-1"></a>   <span class="at">bc_phase =</span> <span class="fu">case_when</span>(</span>
+<span id="cb11-34"><a href="#cb11-34" aria-hidden="true" tabindex="-1"></a>     bc_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>) <span class="sc">~</span> <span class="dv">1</span>,</span>
+<span id="cb11-35"><a href="#cb11-35" aria-hidden="true" tabindex="-1"></a>     bc_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">6</span><span class="sc">:</span><span class="dv">10</span>) <span class="sc">~</span> <span class="dv">2</span>,</span>
+<span id="cb11-36"><a href="#cb11-36" aria-hidden="true" tabindex="-1"></a>     bc_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">11</span><span class="sc">:</span><span class="dv">15</span>) <span class="sc">~</span> <span class="dv">3</span>,</span>
+<span id="cb11-37"><a href="#cb11-37" aria-hidden="true" tabindex="-1"></a>     bc_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">16</span><span class="sc">:</span><span class="dv">20</span>) <span class="sc">~</span> <span class="dv">4</span>,</span>
+<span id="cb11-38"><a href="#cb11-38" aria-hidden="true" tabindex="-1"></a>     bc_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">21</span><span class="sc">:</span><span class="dv">25</span>) <span class="sc">~</span> <span class="dv">5</span>,</span>
+<span id="cb11-39"><a href="#cb11-39" aria-hidden="true" tabindex="-1"></a>     bc_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">26</span><span class="sc">:</span><span class="dv">30</span>) <span class="sc">~</span> <span class="dv">6</span>,</span>
+<span id="cb11-40"><a href="#cb11-40" aria-hidden="true" tabindex="-1"></a>     bc_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">31</span><span class="sc">:</span><span class="dv">35</span>) <span class="sc">~</span> <span class="dv">7</span>,</span>
+<span id="cb11-41"><a href="#cb11-41" aria-hidden="true" tabindex="-1"></a>     bc_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">36</span><span class="sc">:</span><span class="dv">40</span>) <span class="sc">~</span> <span class="dv">8</span></span>
+<span id="cb11-42"><a href="#cb11-42" aria-hidden="true" tabindex="-1"></a>   ),</span>
+<span id="cb11-43"><a href="#cb11-43" aria-hidden="true" tabindex="-1"></a>   <span class="at">br_phase =</span> <span class="fu">case_when</span>(</span>
+<span id="cb11-44"><a href="#cb11-44" aria-hidden="true" tabindex="-1"></a>    br_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>) <span class="sc">~</span> <span class="dv">1</span>,</span>
+<span id="cb11-45"><a href="#cb11-45" aria-hidden="true" tabindex="-1"></a>    br_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">6</span><span class="sc">:</span><span class="dv">10</span>) <span class="sc">~</span> <span class="dv">2</span>,</span>
+<span id="cb11-46"><a href="#cb11-46" aria-hidden="true" tabindex="-1"></a>    br_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">11</span><span class="sc">:</span><span class="dv">15</span>) <span class="sc">~</span> <span class="dv">3</span>,</span>
+<span id="cb11-47"><a href="#cb11-47" aria-hidden="true" tabindex="-1"></a>    br_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">16</span><span class="sc">:</span><span class="dv">20</span>) <span class="sc">~</span> <span class="dv">4</span>,</span>
+<span id="cb11-48"><a href="#cb11-48" aria-hidden="true" tabindex="-1"></a>    br_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">21</span><span class="sc">:</span><span class="dv">25</span>) <span class="sc">~</span> <span class="dv">5</span>,</span>
+<span id="cb11-49"><a href="#cb11-49" aria-hidden="true" tabindex="-1"></a>    br_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">26</span><span class="sc">:</span><span class="dv">30</span>) <span class="sc">~</span> <span class="dv">6</span>,</span>
+<span id="cb11-50"><a href="#cb11-50" aria-hidden="true" tabindex="-1"></a>    br_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">31</span><span class="sc">:</span><span class="dv">35</span>) <span class="sc">~</span> <span class="dv">7</span>,</span>
+<span id="cb11-51"><a href="#cb11-51" aria-hidden="true" tabindex="-1"></a>    br_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">36</span><span class="sc">:</span><span class="dv">40</span>) <span class="sc">~</span> <span class="dv">8</span></span>
+<span id="cb11-52"><a href="#cb11-52" aria-hidden="true" tabindex="-1"></a>   ),</span>
+<span id="cb11-53"><a href="#cb11-53" aria-hidden="true" tabindex="-1"></a>   <span class="at">ct_phase =</span> <span class="fu">case_when</span>(</span>
+<span id="cb11-54"><a href="#cb11-54" aria-hidden="true" tabindex="-1"></a>    ct_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>) <span class="sc">~</span> <span class="dv">1</span>,</span>
+<span id="cb11-55"><a href="#cb11-55" aria-hidden="true" tabindex="-1"></a>    ct_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">6</span><span class="sc">:</span><span class="dv">10</span>) <span class="sc">~</span> <span class="dv">2</span>,</span>
+<span id="cb11-56"><a href="#cb11-56" aria-hidden="true" tabindex="-1"></a>    ct_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">11</span><span class="sc">:</span><span class="dv">15</span>) <span class="sc">~</span> <span class="dv">3</span>,</span>
+<span id="cb11-57"><a href="#cb11-57" aria-hidden="true" tabindex="-1"></a>    ct_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">16</span><span class="sc">:</span><span class="dv">20</span>) <span class="sc">~</span> <span class="dv">4</span>,</span>
+<span id="cb11-58"><a href="#cb11-58" aria-hidden="true" tabindex="-1"></a>    ct_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">21</span><span class="sc">:</span><span class="dv">25</span>) <span class="sc">~</span> <span class="dv">5</span>,</span>
+<span id="cb11-59"><a href="#cb11-59" aria-hidden="true" tabindex="-1"></a>    ct_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">26</span><span class="sc">:</span><span class="dv">30</span>) <span class="sc">~</span> <span class="dv">6</span>,</span>
+<span id="cb11-60"><a href="#cb11-60" aria-hidden="true" tabindex="-1"></a>    ct_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">31</span><span class="sc">:</span><span class="dv">35</span>) <span class="sc">~</span> <span class="dv">7</span>,</span>
+<span id="cb11-61"><a href="#cb11-61" aria-hidden="true" tabindex="-1"></a>    ct_order <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">36</span><span class="sc">:</span><span class="dv">40</span>) <span class="sc">~</span> <span class="dv">8</span> </span>
+<span id="cb11-62"><a href="#cb11-62" aria-hidden="true" tabindex="-1"></a>   )</span>
+<span id="cb11-63"><a href="#cb11-63" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span> </span>
+<span id="cb11-64"><a href="#cb11-64" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>()</span>
+<span id="cb11-65"><a href="#cb11-65" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-66"><a href="#cb11-66" aria-hidden="true" tabindex="-1"></a><span class="co">#mutate a variable calculating the proportion of optimal choice within participant</span></span>
+<span id="cb11-67"><a href="#cb11-67" aria-hidden="true" tabindex="-1"></a><span class="co">#mutate a variable calculating the proportion of A choice within participant</span></span>
+<span id="cb11-68"><a href="#cb11-68" aria-hidden="true" tabindex="-1"></a>df_learning_summary <span class="ot">&lt;-</span> df_learning <span class="sc">|&gt;</span> </span>
+<span id="cb11-69"><a href="#cb11-69" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(</span>
+<span id="cb11-70"><a href="#cb11-70" aria-hidden="true" tabindex="-1"></a>    <span class="at">cols =</span> <span class="fu">ends_with</span>(<span class="st">&quot;_phase&quot;</span>),</span>
+<span id="cb11-71"><a href="#cb11-71" aria-hidden="true" tabindex="-1"></a>    <span class="at">names_to =</span> <span class="st">&quot;pair_type&quot;</span>,   <span class="co"># os_phase / bc_phase / ...</span></span>
+<span id="cb11-72"><a href="#cb11-72" aria-hidden="true" tabindex="-1"></a>    <span class="at">values_to =</span> <span class="st">&quot;phase&quot;</span>,</span>
+<span id="cb11-73"><a href="#cb11-73" aria-hidden="true" tabindex="-1"></a>    <span class="at">values_drop_na =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb11-74"><a href="#cb11-74" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">optimal_choice =</span> <span class="fu">case_when</span>(</span>
+<span id="cb11-75"><a href="#cb11-75" aria-hidden="true" tabindex="-1"></a>    pair_type <span class="sc">==</span> <span class="st">&quot;os_phase&quot;</span> <span class="sc">~</span> os_box_optimal,</span>
+<span id="cb11-76"><a href="#cb11-76" aria-hidden="true" tabindex="-1"></a>    pair_type <span class="sc">==</span> <span class="st">&quot;bc_phase&quot;</span> <span class="sc">~</span> bc_box_optimal,</span>
+<span id="cb11-77"><a href="#cb11-77" aria-hidden="true" tabindex="-1"></a>    pair_type <span class="sc">==</span> <span class="st">&quot;br_phase&quot;</span> <span class="sc">~</span> br_box_optimal, </span>
+<span id="cb11-78"><a href="#cb11-78" aria-hidden="true" tabindex="-1"></a>    pair_type <span class="sc">==</span> <span class="st">&quot;ct_phase&quot;</span> <span class="sc">~</span> ct_box_optimal,</span>
+<span id="cb11-79"><a href="#cb11-79" aria-hidden="true" tabindex="-1"></a>    <span class="at">.unmatched =</span> <span class="st">&quot;error&quot;</span></span>
+<span id="cb11-80"><a href="#cb11-80" aria-hidden="true" tabindex="-1"></a>  )) <span class="sc">|&gt;</span> </span>
+<span id="cb11-81"><a href="#cb11-81" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb11-82"><a href="#cb11-82" aria-hidden="true" tabindex="-1"></a>    <span class="co"># nicer labels for facets</span></span>
+<span id="cb11-83"><a href="#cb11-83" aria-hidden="true" tabindex="-1"></a>    <span class="at">pair_type =</span> dplyr<span class="sc">::</span><span class="fu">recode</span>(</span>
+<span id="cb11-84"><a href="#cb11-84" aria-hidden="true" tabindex="-1"></a>      pair_type,</span>
+<span id="cb11-85"><a href="#cb11-85" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;os_phase&quot;</span> <span class="ot">=</span> <span class="st">&quot;A (0.50) vs not-A (0.50)&quot;</span>,</span>
+<span id="cb11-86"><a href="#cb11-86" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;bc_phase&quot;</span> <span class="ot">=</span> <span class="st">&quot;A (0.60) vs not-A (0.40)&quot;</span>,</span>
+<span id="cb11-87"><a href="#cb11-87" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;ct_phase&quot;</span> <span class="ot">=</span> <span class="st">&quot;A (0.80) vs not-A (0.20)&quot;</span>,</span>
+<span id="cb11-88"><a href="#cb11-88" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;br_phase&quot;</span> <span class="ot">=</span> <span class="st">&quot;A (0.90) vs not-A (0.10)&quot;</span></span>
+<span id="cb11-89"><a href="#cb11-89" aria-hidden="true" tabindex="-1"></a>    )) <span class="sc">|&gt;</span> </span>
+<span id="cb11-90"><a href="#cb11-90" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(id, condition, button_chosen, pair_type, phase, optimal_choice,</span>
+<span id="cb11-91"><a href="#cb11-91" aria-hidden="true" tabindex="-1"></a>         <span class="at">realized_A_0.90 =</span> realized_broccoli, <span class="at">realized_A_0.80 =</span> realized_carrot,</span>
+<span id="cb11-92"><a href="#cb11-92" aria-hidden="true" tabindex="-1"></a>         <span class="at">realized_A_0.50 =</span> realized_strawberry, <span class="at">realized_A_0.60 =</span> realized_banana) <span class="sc">|&gt;</span> </span>
+<span id="cb11-93"><a href="#cb11-93" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">button_chosen =</span> <span class="fu">case_when</span>(</span>
+<span id="cb11-94"><a href="#cb11-94" aria-hidden="true" tabindex="-1"></a>    button_chosen <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">&quot;strawberry.svg&quot;</span>, <span class="st">&quot;banana.svg&quot;</span>,</span>
+<span id="cb11-95"><a href="#cb11-95" aria-hidden="true" tabindex="-1"></a>                         <span class="st">&quot;carrot.svg&quot;</span>, <span class="st">&quot;broccoli.svg&quot;</span>) <span class="sc">~</span> <span class="st">&quot;A&quot;</span>,</span>
+<span id="cb11-96"><a href="#cb11-96" aria-hidden="true" tabindex="-1"></a>    button_chosen <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">&quot;orange.svg&quot;</span>, <span class="st">&quot;cherry.svg&quot;</span>,</span>
+<span id="cb11-97"><a href="#cb11-97" aria-hidden="true" tabindex="-1"></a>                         <span class="st">&quot;tomato.svg&quot;</span>, <span class="st">&quot;raddish.svg&quot;</span> ) <span class="sc">~</span> <span class="st">&quot;not-A&quot;</span>,</span>
+<span id="cb11-98"><a href="#cb11-98" aria-hidden="true" tabindex="-1"></a>    <span class="at">.unmatched =</span> <span class="st">&quot;error&quot;</span></span>
+<span id="cb11-99"><a href="#cb11-99" aria-hidden="true" tabindex="-1"></a>  )) <span class="sc">|&gt;</span> </span>
+<span id="cb11-100"><a href="#cb11-100" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">optimal_choice =</span> <span class="fu">case_when</span>(</span>
+<span id="cb11-101"><a href="#cb11-101" aria-hidden="true" tabindex="-1"></a>    optimal_choice <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">&quot;strawberry.svg&quot;</span>, <span class="st">&quot;banana.svg&quot;</span>,</span>
+<span id="cb11-102"><a href="#cb11-102" aria-hidden="true" tabindex="-1"></a>                          <span class="st">&quot;carrot.svg&quot;</span>, <span class="st">&quot;broccoli.svg&quot;</span>) <span class="sc">~</span> <span class="st">&quot;A&quot;</span>,</span>
+<span id="cb11-103"><a href="#cb11-103" aria-hidden="true" tabindex="-1"></a>    optimal_choice <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">&quot;orange.svg&quot;</span>, <span class="st">&quot;cherry.svg&quot;</span>,</span>
+<span id="cb11-104"><a href="#cb11-104" aria-hidden="true" tabindex="-1"></a>                          <span class="st">&quot;tomato.svg&quot;</span>, <span class="st">&quot;raddish.svg&quot;</span> ) <span class="sc">~</span> <span class="st">&quot;not-A&quot;</span>,</span>
+<span id="cb11-105"><a href="#cb11-105" aria-hidden="true" tabindex="-1"></a>    optimal_choice <span class="sc">==</span> <span class="st">&quot;tie&quot;</span> <span class="sc">~</span> <span class="st">&quot;tie&quot;</span>,</span>
+<span id="cb11-106"><a href="#cb11-106" aria-hidden="true" tabindex="-1"></a>    <span class="at">.unmatched =</span> <span class="st">&quot;error&quot;</span></span>
+<span id="cb11-107"><a href="#cb11-107" aria-hidden="true" tabindex="-1"></a>  )) <span class="sc">|&gt;</span> </span>
+<span id="cb11-108"><a href="#cb11-108" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">if_A_chosen =</span> <span class="fu">case_when</span>(</span>
+<span id="cb11-109"><a href="#cb11-109" aria-hidden="true" tabindex="-1"></a>    button_chosen <span class="sc">==</span> <span class="st">&quot;A&quot;</span> <span class="sc">~</span> <span class="dv">1</span>,</span>
+<span id="cb11-110"><a href="#cb11-110" aria-hidden="true" tabindex="-1"></a>    button_chosen <span class="sc">==</span> <span class="st">&quot;not-A&quot;</span> <span class="sc">~</span> <span class="dv">0</span>,</span>
+<span id="cb11-111"><a href="#cb11-111" aria-hidden="true" tabindex="-1"></a>    <span class="at">.unmatched =</span> <span class="st">&quot;error&quot;</span></span>
+<span id="cb11-112"><a href="#cb11-112" aria-hidden="true" tabindex="-1"></a>  )) <span class="sc">|&gt;</span> </span>
+<span id="cb11-113"><a href="#cb11-113" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb11-114"><a href="#cb11-114" aria-hidden="true" tabindex="-1"></a>    <span class="at">if_optimal =</span> <span class="fu">ifelse</span>(</span>
+<span id="cb11-115"><a href="#cb11-115" aria-hidden="true" tabindex="-1"></a>      button_chosen <span class="sc">==</span> optimal_choice, <span class="dv">1</span>, <span class="dv">0</span></span>
+<span id="cb11-116"><a href="#cb11-116" aria-hidden="true" tabindex="-1"></a>    )) <span class="sc">|&gt;</span></span>
+<span id="cb11-117"><a href="#cb11-117" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">|&gt;</span></span>
+<span id="cb11-118"><a href="#cb11-118" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id, condition, pair_type, phase) <span class="sc">|&gt;</span> </span>
+<span id="cb11-119"><a href="#cb11-119" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">prop_A =</span> <span class="fu">mean</span>(if_A_chosen),</span>
+<span id="cb11-120"><a href="#cb11-120" aria-hidden="true" tabindex="-1"></a>         <span class="at">prop_optimal =</span> <span class="fu">mean</span>(if_optimal)) <span class="sc">|&gt;</span></span>
+<span id="cb11-121"><a href="#cb11-121" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb11-122"><a href="#cb11-122" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">prop_optimal =</span> <span class="fu">if_else</span>(optimal_choice <span class="sc">==</span> <span class="st">&quot;tie&quot;</span>, <span class="cn">NA_real_</span>, prop_optimal)) <span class="sc">|&gt;</span> </span>
+<span id="cb11-123"><a href="#cb11-123" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(id, condition, pair_type, phase, optimal_choice, prop_A, prop_optimal,</span>
+<span id="cb11-124"><a href="#cb11-124" aria-hidden="true" tabindex="-1"></a>         realized_A_0<span class="fl">.90</span>, realized_A_0<span class="fl">.80</span>, realized_A_0<span class="fl">.60</span>, realized_A_0<span class="fl">.50</span>,</span>
+<span id="cb11-125"><a href="#cb11-125" aria-hidden="true" tabindex="-1"></a>         <span class="sc">-</span>if_A_chosen, <span class="sc">-</span>if_optimal, <span class="sc">-</span>button_chosen) <span class="sc">|&gt;</span> </span>
+<span id="cb11-126"><a href="#cb11-126" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unique</span>() </span>
+<span id="cb11-127"><a href="#cb11-127" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-128"><a href="#cb11-128" aria-hidden="true" tabindex="-1"></a>pair_type_levels <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
+<span id="cb11-129"><a href="#cb11-129" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;A (0.50) vs not-A (0.50)&quot;</span>,</span>
+<span id="cb11-130"><a href="#cb11-130" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;A (0.60) vs not-A (0.40)&quot;</span>,</span>
+<span id="cb11-131"><a href="#cb11-131" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;A (0.80) vs not-A (0.20)&quot;</span>,</span>
+<span id="cb11-132"><a href="#cb11-132" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;A (0.90) vs not-A (0.10)&quot;</span></span>
+<span id="cb11-133"><a href="#cb11-133" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb11-134"><a href="#cb11-134" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-135"><a href="#cb11-135" aria-hidden="true" tabindex="-1"></a>df_learning_summary <span class="ot">&lt;-</span> df_learning_summary  <span class="sc">|&gt;</span> </span>
+<span id="cb11-136"><a href="#cb11-136" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">pair_type =</span> <span class="fu">factor</span>(pair_type, <span class="at">levels =</span> pair_type_levels)) <span class="sc">|&gt;</span> </span>
+<span id="cb11-137"><a href="#cb11-137" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">condition =</span> <span class="fu">ifelse</span> (condition <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">&quot;A&quot;</span>, <span class="st">&quot;B&quot;</span>), <span class="st">&quot;low&quot;</span>, <span class="st">&quot;high&quot;</span>)) </span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
 </section>
 <section id="plots" class="level3">
 <h3 class="anchored" data-anchor-id="plots">Plots</h3>
 <div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>strip_format <span class="ot">&lt;-</span> <span class="fu">as_labeller</span>(<span class="cf">function</span>(x) {</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  x <span class="ot">&lt;-</span> <span class="fu">gsub</span>(<span class="st">&quot;</span><span class="sc">\\</span><span class="st">b0</span><span class="sc">\\</span><span class="st">.&quot;</span>, <span class="st">&quot;.&quot;</span>, x)</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">gsub</span>(<span class="st">&quot;</span><span class="sc">\\</span><span class="st">bA</span><span class="sc">\\</span><span class="st">b&quot;</span>, <span class="st">&quot;*A*&quot;</span>, x)</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>condition_labels <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;high&quot;</span> <span class="ot">=</span> <span class="st">&quot;40 learning trials&quot;</span>,</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>                      <span class="st">&quot;low&quot;</span>  <span class="ot">=</span> <span class="st">&quot;20 learning trials&quot;</span>)</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>df_dist <span class="ot">&lt;-</span> df_learning_summary <span class="sc">|&gt;</span> </span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(id,</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>           <span class="st">`</span><span class="at">realized_A_0.50</span><span class="st">`</span>, <span class="st">`</span><span class="at">realized_A_0.60</span><span class="st">`</span>,</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>           <span class="st">`</span><span class="at">realized_A_0.80</span><span class="st">`</span>, <span class="st">`</span><span class="at">realized_A_0.90</span><span class="st">`</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">starts_with</span>(<span class="st">&quot;realized_A&quot;</span>),</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>               <span class="at">names_to =</span> <span class="st">&quot;pair_type&quot;</span>, <span class="at">values_to =</span> <span class="st">&quot;Pr&quot;</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">pair_type =</span> <span class="fu">recode</span>(pair_type,</span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>                       <span class="st">&quot;realized_A_0.50&quot;</span> <span class="ot">=</span> <span class="st">&quot;A (0.50) vs not-A (0.50)&quot;</span>,</span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>                       <span class="st">&quot;realized_A_0.60&quot;</span> <span class="ot">=</span> <span class="st">&quot;A (0.60) vs not-A (0.40)&quot;</span>,</span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>                       <span class="st">&quot;realized_A_0.80&quot;</span> <span class="ot">=</span> <span class="st">&quot;A (0.80) vs not-A (0.20)&quot;</span>,</span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>                       <span class="st">&quot;realized_A_0.90&quot;</span> <span class="ot">=</span> <span class="st">&quot;A (0.90) vs not-A (0.10)&quot;</span>),</span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">pair_type =</span> <span class="fu">factor</span>(pair_type, <span class="at">levels =</span> pair_type_levels)</span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a>df_dist_means <span class="ot">&lt;-</span> df_dist <span class="sc">|&gt;</span> </span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(pair_type) <span class="sc">|&gt;</span> </span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">Pr_mean =</span> <span class="fu">mean</span>(Pr), <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>)</span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a>p_dist <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(df_dist, <span class="fu">aes</span>(<span class="at">x =</span> Pr)) <span class="sc">+</span></span>
+<span id="cb12-29"><a href="#cb12-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">binwidth =</span> <span class="fl">0.05</span>, <span class="at">boundary =</span> <span class="dv">0</span>,</span>
+<span id="cb12-30"><a href="#cb12-30" aria-hidden="true" tabindex="-1"></a>                 <span class="at">fill =</span> <span class="st">&quot;white&quot;</span>, <span class="at">colour =</span> <span class="st">&quot;black&quot;</span>) <span class="sc">+</span></span>
+<span id="cb12-31"><a href="#cb12-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">data =</span> df_dist_means, <span class="fu">aes</span>(<span class="at">xintercept =</span> Pr_mean),</span>
+<span id="cb12-32"><a href="#cb12-32" aria-hidden="true" tabindex="-1"></a>             <span class="at">colour =</span> <span class="st">&quot;#c1272d&quot;</span>, <span class="at">linetype =</span> <span class="st">&quot;dashed&quot;</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb12-33"><a href="#cb12-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="at">data =</span> df_dist_means,</span>
+<span id="cb12-34"><a href="#cb12-34" aria-hidden="true" tabindex="-1"></a>            <span class="fu">aes</span>(<span class="at">x =</span> Pr_mean, <span class="at">y =</span> <span class="cn">Inf</span>,</span>
+<span id="cb12-35"><a href="#cb12-35" aria-hidden="true" tabindex="-1"></a>                <span class="at">label =</span> <span class="fu">sub</span>(<span class="st">&quot;^0&quot;</span>, <span class="st">&quot;&quot;</span>, <span class="fu">sprintf</span>(<span class="st">&quot;%.2f&quot;</span>, Pr_mean))),</span>
+<span id="cb12-36"><a href="#cb12-36" aria-hidden="true" tabindex="-1"></a>            <span class="at">colour =</span> <span class="st">&quot;#c1272d&quot;</span>,</span>
+<span id="cb12-37"><a href="#cb12-37" aria-hidden="true" tabindex="-1"></a>            <span class="at">hjust =</span> <span class="fl">1.5</span>, <span class="at">vjust =</span> <span class="fl">1.6</span>, <span class="at">size =</span> <span class="dv">4</span>) <span class="sc">+</span> </span>
+<span id="cb12-38"><a href="#cb12-38" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_grid</span>(. <span class="sc">~</span> pair_type, <span class="at">labeller =</span> <span class="fu">labeller</span>(<span class="at">pair_type =</span> strip_format)) <span class="sc">+</span></span>
+<span id="cb12-39"><a href="#cb12-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_continuous</span>(<span class="at">breaks =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">0.75</span>, <span class="dv">1</span>)) <span class="sc">+</span></span>
+<span id="cb12-40"><a href="#cb12-40" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_cartesian</span>(<span class="at">xlim =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>)) <span class="sc">+</span></span>
+<span id="cb12-41"><a href="#cb12-41" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">&quot;Realized probability of event *A*&quot;</span>, <span class="at">y =</span> <span class="st">&quot;Number of participants&quot;</span>) <span class="sc">+</span></span>
+<span id="cb12-42"><a href="#cb12-42" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_classic</span>() <span class="sc">+</span></span>
+<span id="cb12-43"><a href="#cb12-43" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">strip.text =</span> <span class="fu">element_markdown</span>(<span class="at">size =</span> <span class="dv">12</span>),</span>
+<span id="cb12-44"><a href="#cb12-44" aria-hidden="true" tabindex="-1"></a>        <span class="at">plot.tag.position =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">1.02</span>))</span>
+<span id="cb12-45"><a href="#cb12-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-46"><a href="#cb12-46" aria-hidden="true" tabindex="-1"></a><span class="co"># reference line at p(A) for each pair type </span></span>
+<span id="cb12-47"><a href="#cb12-47" aria-hidden="true" tabindex="-1"></a>df_ref <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
+<span id="cb12-48"><a href="#cb12-48" aria-hidden="true" tabindex="-1"></a>  <span class="at">pair_type =</span> <span class="fu">factor</span>(pair_type_levels, <span class="at">levels =</span> pair_type_levels),</span>
+<span id="cb12-49"><a href="#cb12-49" aria-hidden="true" tabindex="-1"></a>  <span class="at">p_A       =</span> <span class="fu">c</span>(<span class="fl">0.50</span>, <span class="fl">0.60</span>, <span class="fl">0.80</span>, <span class="fl">0.90</span>)</span>
+<span id="cb12-50"><a href="#cb12-50" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb12-51"><a href="#cb12-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-52"><a href="#cb12-52" aria-hidden="true" tabindex="-1"></a><span class="co"># learning curves </span></span>
+<span id="cb12-53"><a href="#cb12-53" aria-hidden="true" tabindex="-1"></a>p_main <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(df_learning_summary, <span class="fu">aes</span>(<span class="at">x =</span> phase, <span class="at">y =</span> prop_A)) <span class="sc">+</span></span>
+<span id="cb12-54"><a href="#cb12-54" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">data =</span> df_ref, <span class="fu">aes</span>(<span class="at">yintercept =</span> p_A),</span>
+<span id="cb12-55"><a href="#cb12-55" aria-hidden="true" tabindex="-1"></a>             <span class="at">colour =</span> <span class="st">&quot;grey50&quot;</span>, <span class="at">linetype =</span> <span class="st">&quot;dashed&quot;</span>, <span class="at">linewidth =</span> <span class="fl">0.4</span>) <span class="sc">+</span></span>
+<span id="cb12-56"><a href="#cb12-56" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_jitter</span>(<span class="fu">aes</span>(<span class="at">colour =</span> optimal_choice),</span>
+<span id="cb12-57"><a href="#cb12-57" aria-hidden="true" tabindex="-1"></a>              <span class="at">position =</span> <span class="fu">position_jitter</span>(<span class="at">width =</span> <span class="fl">0.3</span>, <span class="at">height =</span> <span class="fl">0.04</span>, <span class="at">seed =</span> <span class="dv">1</span>),</span>
+<span id="cb12-58"><a href="#cb12-58" aria-hidden="true" tabindex="-1"></a>              <span class="at">shape =</span> <span class="dv">1</span>, <span class="at">size =</span> <span class="fl">0.6</span>, <span class="at">stroke =</span> <span class="fl">0.3</span>, <span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb12-59"><a href="#cb12-59" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_summary</span>(<span class="at">fun.data =</span> mean_se, <span class="at">geom =</span> <span class="st">&quot;errorbar&quot;</span>, <span class="at">width =</span> <span class="fl">0.4</span>,</span>
+<span id="cb12-60"><a href="#cb12-60" aria-hidden="true" tabindex="-1"></a>               <span class="at">linewidth =</span> <span class="fl">0.4</span>, <span class="at">colour =</span> <span class="st">&quot;black&quot;</span>, <span class="fu">aes</span>(<span class="at">group =</span> <span class="dv">1</span>)) <span class="sc">+</span></span>
+<span id="cb12-61"><a href="#cb12-61" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_summary</span>(<span class="at">fun =</span> mean, <span class="at">geom =</span> <span class="st">&quot;line&quot;</span>, <span class="at">linewidth =</span> <span class="fl">0.5</span>,</span>
+<span id="cb12-62"><a href="#cb12-62" aria-hidden="true" tabindex="-1"></a>               <span class="at">colour =</span> <span class="st">&quot;black&quot;</span>, <span class="fu">aes</span>(<span class="at">group =</span> <span class="dv">1</span>)) <span class="sc">+</span></span>
+<span id="cb12-63"><a href="#cb12-63" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_summary</span>(<span class="at">fun =</span> mean, <span class="at">geom =</span> <span class="st">&quot;point&quot;</span>, <span class="at">size =</span> <span class="fl">1.2</span>,</span>
+<span id="cb12-64"><a href="#cb12-64" aria-hidden="true" tabindex="-1"></a>               <span class="at">colour =</span> <span class="st">&quot;black&quot;</span>, <span class="fu">aes</span>(<span class="at">group =</span> <span class="dv">1</span>)) <span class="sc">+</span></span>
+<span id="cb12-65"><a href="#cb12-65" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_manual</span>(</span>
+<span id="cb12-66"><a href="#cb12-66" aria-hidden="true" tabindex="-1"></a>    <span class="at">name   =</span> <span class="st">&quot;Event with higher realized probability&quot;</span>,</span>
+<span id="cb12-67"><a href="#cb12-67" aria-hidden="true" tabindex="-1"></a>    <span class="at">values =</span> <span class="fu">c</span>(<span class="st">&quot;A&quot;</span> <span class="ot">=</span> <span class="st">&quot;#D55E00&quot;</span>, <span class="st">&quot;not-A&quot;</span> <span class="ot">=</span> <span class="st">&quot;#0072B2&quot;</span>, <span class="st">&quot;tie&quot;</span> <span class="ot">=</span> <span class="st">&quot;#4D4D4D&quot;</span>),</span>
+<span id="cb12-68"><a href="#cb12-68" aria-hidden="true" tabindex="-1"></a>    <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">&quot;A&quot;</span> <span class="ot">=</span> <span class="st">&quot;*A*&quot;</span>, <span class="st">&quot;not-A&quot;</span> <span class="ot">=</span> <span class="st">&quot;not-*A*&quot;</span>, <span class="st">&quot;tie&quot;</span> <span class="ot">=</span> <span class="st">&quot;tie&quot;</span>)) <span class="sc">+</span></span>
+<span id="cb12-69"><a href="#cb12-69" aria-hidden="true" tabindex="-1"></a>  <span class="fu">guides</span>(<span class="at">colour =</span> <span class="fu">guide_legend</span>(</span>
+<span id="cb12-70"><a href="#cb12-70" aria-hidden="true" tabindex="-1"></a>    <span class="at">override.aes =</span> <span class="fu">list</span>(<span class="at">shape =</span> <span class="dv">16</span>, <span class="at">size =</span> <span class="dv">3</span>, <span class="at">alpha =</span> <span class="dv">1</span>))) <span class="sc">+</span></span>
+<span id="cb12-71"><a href="#cb12-71" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_grid</span>(condition <span class="sc">~</span> pair_type,</span>
+<span id="cb12-72"><a href="#cb12-72" aria-hidden="true" tabindex="-1"></a>             <span class="at">labeller =</span> <span class="fu">labeller</span>(<span class="at">pair_type =</span> strip_format,</span>
+<span id="cb12-73"><a href="#cb12-73" aria-hidden="true" tabindex="-1"></a>                                 <span class="at">condition =</span> condition_labels)) <span class="sc">+</span></span>
+<span id="cb12-74"><a href="#cb12-74" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_continuous</span>(<span class="at">breaks =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">4</span>, <span class="dv">6</span>, <span class="dv">8</span>)) <span class="sc">+</span></span>
+<span id="cb12-75"><a href="#cb12-75" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">&quot;Trial bin&quot;</span>, <span class="at">y =</span> <span class="st">&quot;Proportion predicting *A*&quot;</span>) <span class="sc">+</span></span>
+<span id="cb12-76"><a href="#cb12-76" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_classic</span>() <span class="sc">+</span></span>
+<span id="cb12-77"><a href="#cb12-77" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(</span>
+<span id="cb12-78"><a href="#cb12-78" aria-hidden="true" tabindex="-1"></a>    <span class="at">strip.text.x =</span> <span class="fu">element_markdown</span>(<span class="at">size =</span> <span class="dv">12</span>),   </span>
+<span id="cb12-79"><a href="#cb12-79" aria-hidden="true" tabindex="-1"></a>    <span class="at">strip.text.y =</span> <span class="fu">element_markdown</span>(<span class="at">size =</span> <span class="dv">14</span>)    </span>
+<span id="cb12-80"><a href="#cb12-80" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb12-81"><a href="#cb12-81" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-82"><a href="#cb12-82" aria-hidden="true" tabindex="-1"></a><span class="co"># stack two plots, aligned by the pair_type columns</span></span>
+<span id="cb12-83"><a href="#cb12-83" aria-hidden="true" tabindex="-1"></a>p_combined <span class="ot">&lt;-</span> p_dist <span class="sc">/</span> p_main <span class="sc">+</span></span>
+<span id="cb12-84"><a href="#cb12-84" aria-hidden="true" tabindex="-1"></a>  <span class="fu">plot_layout</span>(<span class="at">heights =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">3</span>), <span class="at">guides =</span> <span class="st">&quot;collect&quot;</span>) <span class="sc">+</span></span>
+<span id="cb12-85"><a href="#cb12-85" aria-hidden="true" tabindex="-1"></a>  <span class="fu">plot_annotation</span>(<span class="at">tag_levels =</span> <span class="st">&quot;A&quot;</span>) <span class="sc">&amp;</span></span>
+<span id="cb12-86"><a href="#cb12-86" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(</span>
+<span id="cb12-87"><a href="#cb12-87" aria-hidden="true" tabindex="-1"></a>    <span class="at">legend.position =</span> <span class="st">&quot;bottom&quot;</span>,</span>
+<span id="cb12-88"><a href="#cb12-88" aria-hidden="true" tabindex="-1"></a>    <span class="at">axis.title.x =</span> <span class="fu">element_markdown</span>(<span class="at">size =</span> <span class="dv">15</span>),   </span>
+<span id="cb12-89"><a href="#cb12-89" aria-hidden="true" tabindex="-1"></a>    <span class="at">axis.title.y =</span> <span class="fu">element_markdown</span>(<span class="at">size =</span> <span class="dv">15</span>),      </span>
+<span id="cb12-90"><a href="#cb12-90" aria-hidden="true" tabindex="-1"></a>    <span class="at">legend.title =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">14</span>),</span>
+<span id="cb12-91"><a href="#cb12-91" aria-hidden="true" tabindex="-1"></a>    <span class="at">legend.text  =</span> <span class="fu">element_markdown</span>(<span class="at">size =</span> <span class="dv">13</span>),</span>
+<span id="cb12-92"><a href="#cb12-92" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.tag     =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">16</span>, <span class="at">face =</span> <span class="st">&quot;bold&quot;</span>)</span>
+<span id="cb12-93"><a href="#cb12-93" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb12-94"><a href="#cb12-94" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-95"><a href="#cb12-95" aria-hidden="true" tabindex="-1"></a>p_combined</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -2274,64 +2666,65 @@ vertical-align: -.125em;
 </figure>
 </div>
 </div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="st">&quot;learning.pdf&quot;</span>, <span class="at">width =</span> <span class="dv">12</span>, <span class="at">height =</span> <span class="dv">8</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 </section>
 <section id="inferential-statistics" class="level3">
 <h3 class="anchored" data-anchor-id="inferential-statistics">Inferential statistics</h3>
-<p>We define sucessful learning as sensitivity to experienced frequency: If participants learned, then the more often <em>A</em> actually occurred for a given participant, the more often they should predict <em>A</em>.</p>
+<p>We define successful learning as sensitivity to experienced frequency: If participants learned, then the more often <em>A</em> actually occurred for a given participant, the more often they should predict <em>A</em>.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>item_A <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="at">A60 =</span> <span class="st">&quot;banana&quot;</span>, <span class="at">A50 =</span> <span class="st">&quot;strawberry&quot;</span>, <span class="at">A80 =</span> <span class="st">&quot;carrot&quot;</span>, <span class="at">A90 =</span> <span class="st">&quot;broccoli&quot;</span>)</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>df_learning2 <span class="ot">&lt;-</span> df_learning <span class="sc">|&gt;</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">id =</span> <span class="fu">factor</span>(id)) <span class="sc">|&gt;</span> </span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">pair  =</span> <span class="fu">case_when</span>(bc_box <span class="sc">~</span> <span class="st">&quot;A60&quot;</span>, os_box <span class="sc">~</span> <span class="st">&quot;A50&quot;</span>, ct_box <span class="sc">~</span> <span class="st">&quot;A80&quot;</span>, br_box <span class="sc">~</span> <span class="st">&quot;A90&quot;</span>),</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">trial =</span> <span class="fu">case_when</span>(pair <span class="sc">==</span> <span class="st">&quot;A60&quot;</span> <span class="sc">~</span> bc_order, pair <span class="sc">==</span> <span class="st">&quot;A50&quot;</span> <span class="sc">~</span> os_order,</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>                      pair <span class="sc">==</span> <span class="st">&quot;A80&quot;</span> <span class="sc">~</span> ct_order, pair <span class="sc">==</span> <span class="st">&quot;A90&quot;</span> <span class="sc">~</span> br_order),</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">bin   =</span> <span class="fu">case_when</span>(pair <span class="sc">==</span> <span class="st">&quot;A60&quot;</span> <span class="sc">~</span> bc_phase, pair <span class="sc">==</span> <span class="st">&quot;A50&quot;</span> <span class="sc">~</span> os_phase,</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>                      pair <span class="sc">==</span> <span class="st">&quot;A80&quot;</span> <span class="sc">~</span> ct_phase, pair <span class="sc">==</span> <span class="st">&quot;A90&quot;</span> <span class="sc">~</span> br_phase),</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">drawn     =</span> <span class="fu">coalesce</span>(drawn_fruit, drawn_veggie),</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">A_item    =</span> item_A[pair],</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">predict_A =</span> <span class="fu">as.integer</span>(<span class="fu">str_remove</span>(button_chosen, <span class="st">&quot;</span><span class="sc">\\</span><span class="st">.svg$&quot;</span>) <span class="sc">==</span> A_item), <span class="co">#1 = event A and 0 = not-A</span></span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">outcome_A =</span> <span class="fu">as.integer</span>(<span class="fu">str_remove</span>(drawn,         <span class="st">&quot;</span><span class="sc">\\</span><span class="st">.svg$&quot;</span>) <span class="sc">==</span> A_item), <span class="co">#1 = event A and 0 = not-A</span></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">condition =</span> <span class="fu">factor</span>(<span class="fu">if_else</span>(condition <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">&quot;A&quot;</span>, <span class="st">&quot;B&quot;</span>), <span class="st">&quot;20&quot;</span>, <span class="st">&quot;40&quot;</span>), <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">&quot;20&quot;</span>, <span class="st">&quot;40&quot;</span>)),</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">pair =</span> <span class="fu">factor</span>(pair, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">&quot;A50&quot;</span>, <span class="st">&quot;A60&quot;</span>, <span class="st">&quot;A80&quot;</span>, <span class="st">&quot;A90&quot;</span>))</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span> </span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(id, condition, pair, trial, bin, drawn, A_item, predict_A, outcome_A) <span class="sc">|&gt;</span> </span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id, pair) <span class="sc">|&gt;</span>  </span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">realized_pA   =</span> <span class="fu">mean</span>(outcome_A)) <span class="sc">|&gt;</span> </span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">|&gt;</span></span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">rpA10    =</span> (realized_pA   <span class="sc">-</span> .<span class="dv">5</span>) <span class="sc">*</span> <span class="dv">10</span>,   <span class="co"># unit = .10, 0 at .50</span></span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>  ) </span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>df_learning_bin <span class="ot">&lt;-</span> df_learning2 <span class="sc">|&gt;</span></span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id, condition, pair, bin) <span class="sc">|&gt;</span></span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">k =</span> <span class="fu">sum</span>(predict_A),</span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">n =</span> <span class="fu">n</span>(),</span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    <span class="at">rpA10 =</span> <span class="fu">first</span>(rpA10),</span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span></span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>item_A <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="at">A60 =</span> <span class="st">&quot;banana&quot;</span>, <span class="at">A50 =</span> <span class="st">&quot;strawberry&quot;</span>, <span class="at">A80 =</span> <span class="st">&quot;carrot&quot;</span>, <span class="at">A90 =</span> <span class="st">&quot;broccoli&quot;</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>df_learning2 <span class="ot">&lt;-</span> df_learning <span class="sc">|&gt;</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">id =</span> <span class="fu">factor</span>(id)) <span class="sc">|&gt;</span> </span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">pair  =</span> <span class="fu">case_when</span>(bc_box <span class="sc">~</span> <span class="st">&quot;A60&quot;</span>, os_box <span class="sc">~</span> <span class="st">&quot;A50&quot;</span>, ct_box <span class="sc">~</span> <span class="st">&quot;A80&quot;</span>, br_box <span class="sc">~</span> <span class="st">&quot;A90&quot;</span>),</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">trial =</span> <span class="fu">case_when</span>(pair <span class="sc">==</span> <span class="st">&quot;A60&quot;</span> <span class="sc">~</span> bc_order, pair <span class="sc">==</span> <span class="st">&quot;A50&quot;</span> <span class="sc">~</span> os_order,</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>                      pair <span class="sc">==</span> <span class="st">&quot;A80&quot;</span> <span class="sc">~</span> ct_order, pair <span class="sc">==</span> <span class="st">&quot;A90&quot;</span> <span class="sc">~</span> br_order),</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">bin   =</span> <span class="fu">case_when</span>(pair <span class="sc">==</span> <span class="st">&quot;A60&quot;</span> <span class="sc">~</span> bc_phase, pair <span class="sc">==</span> <span class="st">&quot;A50&quot;</span> <span class="sc">~</span> os_phase,</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>                      pair <span class="sc">==</span> <span class="st">&quot;A80&quot;</span> <span class="sc">~</span> ct_phase, pair <span class="sc">==</span> <span class="st">&quot;A90&quot;</span> <span class="sc">~</span> br_phase),</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">drawn     =</span> <span class="fu">coalesce</span>(drawn_fruit, drawn_veggie),</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">A_item    =</span> item_A[pair],</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">predict_A =</span> <span class="fu">as.integer</span>(<span class="fu">str_remove</span>(button_chosen, <span class="st">&quot;</span><span class="sc">\\</span><span class="st">.svg$&quot;</span>) <span class="sc">==</span> A_item), <span class="co">#1 = event A and 0 = not-A</span></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">outcome_A =</span> <span class="fu">as.integer</span>(<span class="fu">str_remove</span>(drawn,         <span class="st">&quot;</span><span class="sc">\\</span><span class="st">.svg$&quot;</span>) <span class="sc">==</span> A_item), <span class="co">#1 = event A and 0 = not-A</span></span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">condition =</span> <span class="fu">factor</span>(<span class="fu">if_else</span>(condition <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">&quot;A&quot;</span>, <span class="st">&quot;B&quot;</span>), <span class="st">&quot;20&quot;</span>, <span class="st">&quot;40&quot;</span>), <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">&quot;20&quot;</span>, <span class="st">&quot;40&quot;</span>)),</span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">pair =</span> <span class="fu">factor</span>(pair, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">&quot;A50&quot;</span>, <span class="st">&quot;A60&quot;</span>, <span class="st">&quot;A80&quot;</span>, <span class="st">&quot;A90&quot;</span>))</span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span> </span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(id, condition, pair, trial, bin, drawn, A_item, predict_A, outcome_A) <span class="sc">|&gt;</span> </span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id, pair) <span class="sc">|&gt;</span>  </span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">realized_pA   =</span> <span class="fu">mean</span>(outcome_A)) <span class="sc">|&gt;</span> </span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">|&gt;</span></span>
+<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">rpA10    =</span> (realized_pA   <span class="sc">-</span> .<span class="dv">5</span>) <span class="sc">*</span> <span class="dv">10</span>,   <span class="co"># unit = .10, 0 at .50</span></span>
+<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a>  ) </span>
+<span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-25"><a href="#cb14-25" aria-hidden="true" tabindex="-1"></a>df_learning_bin <span class="ot">&lt;-</span> df_learning2 <span class="sc">|&gt;</span></span>
+<span id="cb14-26"><a href="#cb14-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id, condition, pair, bin) <span class="sc">|&gt;</span></span>
+<span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb14-28"><a href="#cb14-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">k =</span> <span class="fu">sum</span>(predict_A),</span>
+<span id="cb14-29"><a href="#cb14-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">n =</span> <span class="fu">n</span>(),</span>
+<span id="cb14-30"><a href="#cb14-30" aria-hidden="true" tabindex="-1"></a>    <span class="at">rpA10 =</span> <span class="fu">first</span>(rpA10),</span>
+<span id="cb14-31"><a href="#cb14-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span></span>
+<span id="cb14-32"><a href="#cb14-32" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>ctrl <span class="ot">&lt;-</span> <span class="fu">glmerControl</span>(<span class="at">optimizer =</span> <span class="st">&quot;bobyqa&quot;</span>, <span class="at">optCtrl =</span> <span class="fu">list</span>(<span class="at">maxfun =</span> <span class="fl">2e5</span>))</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>fit_group <span class="ot">&lt;-</span> <span class="cf">function</span>(cond) {</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  dg <span class="ot">&lt;-</span> df_learning_bin <span class="sc">|&gt;</span> <span class="fu">filter</span>(condition <span class="sc">==</span> cond)</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="co"># learning test: does sensitivity change across bins? (bin as factor, no linearity assumption)</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  m  <span class="ot">&lt;-</span> <span class="fu">glmer</span>(<span class="fu">cbind</span>(k, n <span class="sc">-</span> k) <span class="sc">~</span> rpA10 <span class="sc">*</span> <span class="fu">factor</span>(bin) <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">+</span> rpA10 <span class="sc">|</span> id),</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>              <span class="at">data =</span> dg, <span class="at">family =</span> binomial, <span class="at">control =</span> ctrl)</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  m0 <span class="ot">&lt;-</span> <span class="fu">glmer</span>(<span class="fu">cbind</span>(k, n <span class="sc">-</span> k) <span class="sc">~</span> rpA10 <span class="sc">+</span> <span class="fu">factor</span>(bin) <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">+</span> rpA10 <span class="sc">|</span> id),</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>              <span class="at">data =</span> dg, <span class="at">family =</span> binomial, <span class="at">control =</span> ctrl)</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="st">&quot;</span><span class="sc">\n</span><span class="st">==== condition&quot;</span>, cond, <span class="st">&quot;====</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="fu">anova</span>(m0, m))                                   <span class="co"># Q1: learning occurred?</span></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  st <span class="ot">&lt;-</span> <span class="fu">emtrends</span>(m, <span class="sc">~</span> bin, <span class="at">var =</span> <span class="st">&quot;rpA10&quot;</span>)               <span class="co"># per-bin slope</span></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="fu">summary</span>(st, <span class="at">infer =</span> <span class="cn">TRUE</span>))</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="fu">contrast</span>(st, <span class="st">&quot;consec&quot;</span>))                         <span class="co"># Q2: which bin-to-bin jumps are ~0 = plateau</span></span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="fu">fit_group</span>(<span class="st">&quot;20&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>ctrl <span class="ot">&lt;-</span> <span class="fu">glmerControl</span>(<span class="at">optimizer =</span> <span class="st">&quot;bobyqa&quot;</span>, <span class="at">optCtrl =</span> <span class="fu">list</span>(<span class="at">maxfun =</span> <span class="fl">2e5</span>))</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>fit_group <span class="ot">&lt;-</span> <span class="cf">function</span>(cond) {</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  dg <span class="ot">&lt;-</span> df_learning_bin <span class="sc">|&gt;</span> <span class="fu">filter</span>(condition <span class="sc">==</span> cond)</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="co"># learning test: does sensitivity change across bins? (bin as factor, no linearity assumption)</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  m  <span class="ot">&lt;-</span> <span class="fu">glmer</span>(<span class="fu">cbind</span>(k, n <span class="sc">-</span> k) <span class="sc">~</span> rpA10 <span class="sc">*</span> <span class="fu">factor</span>(bin) <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">+</span> rpA10 <span class="sc">|</span> id),</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>              <span class="at">data =</span> dg, <span class="at">family =</span> binomial, <span class="at">control =</span> ctrl)</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>  m0 <span class="ot">&lt;-</span> <span class="fu">glmer</span>(<span class="fu">cbind</span>(k, n <span class="sc">-</span> k) <span class="sc">~</span> rpA10 <span class="sc">+</span> <span class="fu">factor</span>(bin) <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">+</span> rpA10 <span class="sc">|</span> id),</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>              <span class="at">data =</span> dg, <span class="at">family =</span> binomial, <span class="at">control =</span> ctrl)</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="st">&quot;</span><span class="sc">\n</span><span class="st">==== condition&quot;</span>, cond, <span class="st">&quot;====</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="fu">anova</span>(m0, m))                                   <span class="co"># Q1: learning occurred?</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>  st <span class="ot">&lt;-</span> <span class="fu">emtrends</span>(m, <span class="sc">~</span> bin, <span class="at">var =</span> <span class="st">&quot;rpA10&quot;</span>)               <span class="co"># per-bin slope</span></span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="fu">summary</span>(st, <span class="at">infer =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="fu">contrast</span>(st, <span class="st">&quot;consec&quot;</span>))                         <span class="co"># Q2: which bin-to-bin jumps are ~0 = plateau</span></span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a><span class="fu">fit_group</span>(<span class="st">&quot;20&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 ==== condition 20 ====
@@ -2354,11 +2747,11 @@ Confidence level used: 0.95
  contrast    estimate     SE  df z.ratio p.value
  bin2 - bin1   0.1555 0.0298 Inf   5.209 &lt;0.0001
  bin3 - bin2   0.1242 0.0318 Inf   3.906  0.0003
- bin4 - bin3   0.0474 0.0333 Inf   1.426  0.3566
+ bin4 - bin3   0.0474 0.0333 Inf   1.426  0.3565
 
 P value adjustment: mvt method for 3 tests </code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">fit_group</span>(<span class="st">&quot;40&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">fit_group</span>(<span class="st">&quot;40&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 ==== condition 40 ====
@@ -2384,9 +2777,9 @@ Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&
 Confidence level used: 0.95 
  contrast    estimate     SE  df z.ratio p.value
  bin2 - bin1   0.1627 0.0313 Inf   5.193 &lt;0.0001
- bin3 - bin2   0.0346 0.0327 Inf   1.059  0.8635
- bin4 - bin3   0.0870 0.0339 Inf   2.568  0.0644
- bin5 - bin4   0.0527 0.0352 Inf   1.495  0.5762
+ bin3 - bin2   0.0346 0.0327 Inf   1.059  0.8634
+ bin4 - bin3   0.0870 0.0339 Inf   2.568  0.0638
+ bin5 - bin4   0.0527 0.0352 Inf   1.495  0.5763
  bin6 - bin5  -0.0090 0.0359 Inf  -0.250  1.0000
  bin7 - bin6   0.0327 0.0363 Inf   0.901  0.9308
  bin8 - bin7  -0.0145 0.0364 Inf  -0.399  0.9992
@@ -2395,31 +2788,31 @@ P value adjustment: mvt method for 7 tests </code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>df_cum <span class="ot">&lt;-</span> df_learning2 <span class="sc">|&gt;</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(id, pair, trial) <span class="sc">|&gt;</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id, pair) <span class="sc">|&gt;</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">run_pA =</span> dplyr<span class="sc">::</span><span class="fu">lag</span>(<span class="fu">cummean</span>(outcome_A))) <span class="sc">|&gt;</span>   <span class="co"># frequency seen BEFORE this trial</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">|&gt;</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(run_pA)) <span class="sc">|&gt;</span>                            <span class="co"># drop trial 1</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">runpA10 =</span> (run_pA <span class="sc">-</span> .<span class="dv">5</span>) <span class="sc">*</span> <span class="dv">10</span>)</span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>df_cum_bin <span class="ot">&lt;-</span> df_cum <span class="sc">|&gt;</span></span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id, condition, pair, bin) <span class="sc">|&gt;</span></span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">k =</span> <span class="fu">sum</span>(predict_A), <span class="at">n =</span> <span class="fu">n</span>(),</span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>            <span class="at">runpA10 =</span> <span class="fu">mean</span>(runpA10), <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>)   <span class="co"># mean running-freq within bin</span></span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>fit_cum <span class="ot">&lt;-</span> <span class="cf">function</span>(cond) {</span>
-<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>  dg <span class="ot">&lt;-</span> df_cum_bin <span class="sc">|&gt;</span> <span class="fu">filter</span>(condition <span class="sc">==</span> cond)</span>
-<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>  m  <span class="ot">&lt;-</span> <span class="fu">glmer</span>(<span class="fu">cbind</span>(k, n <span class="sc">-</span> k) <span class="sc">~</span> runpA10 <span class="sc">*</span> <span class="fu">factor</span>(bin) <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">+</span> runpA10 <span class="sc">|</span> id),</span>
-<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>              <span class="at">data =</span> dg, <span class="at">family =</span> binomial, <span class="at">control =</span> ctrl)</span>
-<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>  m0 <span class="ot">&lt;-</span> <span class="fu">glmer</span>(<span class="fu">cbind</span>(k, n <span class="sc">-</span> k) <span class="sc">~</span> runpA10 <span class="sc">+</span> <span class="fu">factor</span>(bin) <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">+</span> runpA10 <span class="sc">|</span> id),</span>
-<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>              <span class="at">data =</span> dg, <span class="at">family =</span> binomial, <span class="at">control =</span> ctrl)</span>
-<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="st">&quot;</span><span class="sc">\n</span><span class="st">==== cumulative, condition&quot;</span>, cond, <span class="st">&quot;====</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
-<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="fu">anova</span>(m0, m))</span>
-<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="fu">summary</span>(<span class="fu">emtrends</span>(m, <span class="sc">~</span> bin, <span class="at">var =</span> <span class="st">&quot;runpA10&quot;</span>), <span class="at">infer =</span> <span class="cn">TRUE</span>))</span>
-<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="fu">contrast</span>(<span class="fu">emtrends</span>(m, <span class="sc">~</span> bin, <span class="at">var =</span> <span class="st">&quot;runpA10&quot;</span>), <span class="st">&quot;consec&quot;</span>))</span>
-<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a><span class="fu">fit_cum</span>(<span class="st">&quot;20&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>df_cum <span class="ot">&lt;-</span> df_learning2 <span class="sc">|&gt;</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(id, pair, trial) <span class="sc">|&gt;</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id, pair) <span class="sc">|&gt;</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">run_pA =</span> dplyr<span class="sc">::</span><span class="fu">lag</span>(<span class="fu">cummean</span>(outcome_A))) <span class="sc">|&gt;</span>   <span class="co"># frequency seen BEFORE this trial</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">|&gt;</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(run_pA)) <span class="sc">|&gt;</span>                            <span class="co"># drop trial 1</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">runpA10 =</span> (run_pA <span class="sc">-</span> .<span class="dv">5</span>) <span class="sc">*</span> <span class="dv">10</span>)</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>df_cum_bin <span class="ot">&lt;-</span> df_cum <span class="sc">|&gt;</span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id, condition, pair, bin) <span class="sc">|&gt;</span></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">k =</span> <span class="fu">sum</span>(predict_A), <span class="at">n =</span> <span class="fu">n</span>(),</span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>            <span class="at">runpA10 =</span> <span class="fu">mean</span>(runpA10), <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>)   <span class="co"># mean running-freq within bin</span></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>fit_cum <span class="ot">&lt;-</span> <span class="cf">function</span>(cond) {</span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>  dg <span class="ot">&lt;-</span> df_cum_bin <span class="sc">|&gt;</span> <span class="fu">filter</span>(condition <span class="sc">==</span> cond)</span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a>  m  <span class="ot">&lt;-</span> <span class="fu">glmer</span>(<span class="fu">cbind</span>(k, n <span class="sc">-</span> k) <span class="sc">~</span> runpA10 <span class="sc">*</span> <span class="fu">factor</span>(bin) <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">+</span> runpA10 <span class="sc">|</span> id),</span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a>              <span class="at">data =</span> dg, <span class="at">family =</span> binomial, <span class="at">control =</span> ctrl)</span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a>  m0 <span class="ot">&lt;-</span> <span class="fu">glmer</span>(<span class="fu">cbind</span>(k, n <span class="sc">-</span> k) <span class="sc">~</span> runpA10 <span class="sc">+</span> <span class="fu">factor</span>(bin) <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">+</span> runpA10 <span class="sc">|</span> id),</span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a>              <span class="at">data =</span> dg, <span class="at">family =</span> binomial, <span class="at">control =</span> ctrl)</span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="st">&quot;</span><span class="sc">\n</span><span class="st">==== cumulative, condition&quot;</span>, cond, <span class="st">&quot;====</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="fu">anova</span>(m0, m))</span>
+<span id="cb19-22"><a href="#cb19-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="fu">summary</span>(<span class="fu">emtrends</span>(m, <span class="sc">~</span> bin, <span class="at">var =</span> <span class="st">&quot;runpA10&quot;</span>), <span class="at">infer =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb19-23"><a href="#cb19-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span>(<span class="fu">contrast</span>(<span class="fu">emtrends</span>(m, <span class="sc">~</span> bin, <span class="at">var =</span> <span class="st">&quot;runpA10&quot;</span>), <span class="st">&quot;consec&quot;</span>))</span>
+<span id="cb19-24"><a href="#cb19-24" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb19-25"><a href="#cb19-25" aria-hidden="true" tabindex="-1"></a><span class="fu">fit_cum</span>(<span class="st">&quot;20&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 ==== cumulative, condition 20 ====
@@ -2441,12 +2834,12 @@ Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&
 Confidence level used: 0.95 
  contrast    estimate     SE  df z.ratio p.value
  bin2 - bin1   0.1584 0.0244 Inf   6.499 &lt;0.0001
- bin3 - bin2   0.0965 0.0291 Inf   3.315  0.0025
- bin4 - bin3   0.0404 0.0321 Inf   1.260  0.4567
+ bin3 - bin2   0.0965 0.0291 Inf   3.315  0.0028
+ bin4 - bin3   0.0404 0.0321 Inf   1.260  0.4566
 
 P value adjustment: mvt method for 3 tests </code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">fit_cum</span>(<span class="st">&quot;40&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">fit_cum</span>(<span class="st">&quot;40&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 ==== cumulative, condition 40 ====
@@ -2473,19 +2866,46 @@ Confidence level used: 0.95
  contrast    estimate     SE  df z.ratio p.value
  bin2 - bin1  0.15686 0.0237 Inf   6.607 &lt;0.0001
  bin3 - bin2  0.00477 0.0276 Inf   0.173  1.0000
- bin4 - bin3  0.09035 0.0305 Inf   2.966  0.0196
- bin5 - bin4  0.07701 0.0331 Inf   2.323  0.1204
- bin6 - bin5 -0.02928 0.0344 Inf  -0.851  0.9461
- bin7 - bin6  0.03625 0.0350 Inf   1.034  0.8752
+ bin4 - bin3  0.09035 0.0305 Inf   2.966  0.0200
+ bin5 - bin4  0.07701 0.0331 Inf   2.323  0.1203
+ bin6 - bin5 -0.02928 0.0344 Inf  -0.851  0.9462
+ bin7 - bin6  0.03625 0.0350 Inf   1.034  0.8751
  bin8 - bin7 -0.00973 0.0357 Inf  -0.272  0.9999
 
 P value adjustment: mvt method for 7 tests </code></pre>
 </div>
 </div>
-<p>create subsample and save</p>
-<section id="plotting-sub-sample" class="level5">
-<h5 class="anchored" data-anchor-id="plotting-sub-sample">Plotting sub-sample</h5>
 </section>
+<section id="subsample-preparation-for-robustness-analysis" class="level3">
+<h3 class="anchored" data-anchor-id="subsample-preparation-for-robustness-analysis">Subsample preparation for robustness analysis</h3>
+<p>Criterion: over the last 10 learning trials for each edge pair (the final two 5-trial bins), the participant predicted event <em>A</em> on more than half of trials. Both edge pairs must pass.</p>
+<p>The 10-trial windows in both learning-trial conditions (20-trial: bins 3-4; 40-trial: bins 7-8) fall inside the learning plateau.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>included_ids <span class="ot">&lt;-</span> df_learning_bin <span class="sc">|&gt;</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(pair <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">&quot;A80&quot;</span>, <span class="st">&quot;A90&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id, pair) <span class="sc">|&gt;</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_max</span>(bin, <span class="at">n =</span> <span class="dv">2</span>, <span class="at">with_ties =</span> <span class="cn">FALSE</span>) <span class="sc">|&gt;</span>        <span class="co"># last 10 trials per edge pair</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">prop_A =</span> <span class="fu">sum</span>(k) <span class="sc">/</span> <span class="fu">sum</span>(n), <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(id) <span class="sc">|&gt;</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">pass =</span> <span class="fu">sum</span>(prop_A <span class="sc">&gt;</span> <span class="fl">0.5</span>) <span class="sc">==</span> <span class="dv">2</span>, <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>) <span class="sc">|&gt;</span>   <span class="co"># both pairs</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(pass) <span class="sc">|&gt;</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">pull</span>(id)</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a><span class="co"># retention by condition</span></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>df_learning2 <span class="sc">|&gt;</span> <span class="fu">distinct</span>(id, condition) <span class="sc">|&gt;</span></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(condition, <span class="at">kept =</span> id <span class="sc">%in%</span> included_ids)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 4 × 3
+  condition kept      n
+  &lt;fct&gt;     &lt;lgl&gt; &lt;int&gt;
+1 20        FALSE    40
+2 20        TRUE    147
+3 40        FALSE    31
+4 40        TRUE    163</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co">#save subsample ids </span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(included_ids, <span class="st">&quot;subsample_ids.rds&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
 </section>
 
 </main>
