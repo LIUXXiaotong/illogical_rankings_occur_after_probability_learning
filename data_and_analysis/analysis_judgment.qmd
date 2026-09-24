@@ -1,0 +1,804 @@
+---
+title: "Data Analysis"
+format: 
+  html:
+    embed-resources: true
+    self-contained-math: true
+    toc: true
+    toc-depth: 6
+    toc-location: left
+editor: visual
+---
+
+### R preparation
+
+```{r}
+if (!requireNamespace("pacman", quietly = TRUE)) { 
+  install.packages("pacman")
+} 
+library("pacman")
+#already load:
+p_load(tidyverse, here, viridis, cowplot, MPTinR, scales, ggh4x, patchwork, irr)
+
+df_judgment <- read.csv("data_judgment.csv") |> 
+  mutate(frequency_condition = 
+           case_when(condition %in% c("A", "B") ~ "20-learning-trial",
+                     condition %in% c("C", "D") ~ "40-learning-trial",
+                     TRUE ~ NA)) |>
+  
+ mutate(part = recode(part, "veggie" = "edge", "fruit" = "mid"))
+
+subsample_ids <- readRDS("subsample_ids.rds")
+
+```
+
+### Wiki
+
+Re-name the stimuli for the convenience of coding:
+
+| banana (from box A): A
+| cherry (from box A): B
+| orange (form box B): C
+| strawberry(from box B): D
+| carrot(from box C): E
+| tomato(from box C): F
+| broccoli(from box D): G
+| radish(from box D): H
+| A&B are a pair of complementary mid-events, C&D are a pair of complementary mid-events,
+| E&F are a pair of complementary edge-events, G&H are a pair of complementary edge-events
+
+Liu et al. (2025) found illogical rankings. We wanted to know if illogical rankings occur after probability learning (in the learning environment). In the learning phase, participants learnt the probability of two pairs of complementary events {A, not-A, B, not-B}.Rankings were elicited from participants in two ways. In the first way, each participant provided rankings for stimuli of the same type (learned in the same block) simultaneously; that is, each participant provided a ranking for the mid-event set simultaneously, and then a ranking for the edge-event set simultaneously, resulting in two rankings per participant. In the second way, participants did pairwise comparisons of stimuli of the same type (learned in the same block). For each set of four stimuli of the same type, the participant did the pairwise comparison of every possible combination twice. For example, for the event set {A, not-A, B, not-B}, participants compared A versus not-A twice, compared A versus B twice, compared A versus not-B twice, compared not-A versus B twice, compared not-A versus not-B twice and compared B versus not-B twice. A ranking was elicited from the pairwise comparison results for the fruit set, and a ranking was elicited from the pairwise comparison results for the vegetable set, again resulting in two rankings per participant.
+
+### Data preparation:
+
+Specify the category system for categorizing the rankings. There are three types of rankings: logical rankings, interlaced illogical rankings, stacked illogical rankings and other illogical rankings.
+
+```{r specifying cateogory system}
+
+logical_patterns <- c("A\\|C\\|D\\|B",
+                      "A\\|D\\|C\\|B",
+                      "B\\|C\\|D\\|A",
+                      "B\\|D\\|C\\|A",
+                      "C\\|A\\|B\\|D",
+                      "C\\|B\\|A\\|D",
+                      "D\\|A\\|B\\|C",
+                      "D\\|B\\|A\\|C",
+                      "A\\|CD\\|B\\|",
+                      "B\\|CD\\|A\\|",
+                      "C\\|AB\\|D\\|",
+                      "D\\|AB\\|C\\|",
+                      "AC\\|BD\\|\\|",
+                      "AD\\|BC\\|\\|",
+                      "BC\\|AD\\|\\|",
+                      "BD\\|AC\\|\\|",
+                      "ABCD\\|\\|\\|",
+                      "E\\|G\\|H\\|F",
+                      "E\\|H\\|G\\|F",
+                      "F\\|G\\|H\\|E",
+                      "F\\|H\\|G\\|E",
+                      "G\\|E\\|F\\|H",
+                      "G\\|F\\|E\\|H",
+                      "H\\|E\\|F\\|G",
+                      "H\\|F\\|E\\|G",
+                      "E\\|GH\\|F\\|",
+                      "F\\|GH\\|E\\|",
+                      "G\\|EF\\|H\\|",
+                      "H\\|EF\\|G\\|",
+                      "EG\\|FH\\|\\|",
+                      "EH\\|FG\\|\\|",
+                      "FG\\|EH\\|\\|",
+                      "FH\\|EG\\|\\|",
+                      "EFGH\\|\\|\\|")
+
+stacked_patterns <- c("A\\|B\\|C\\|D", "A\\|B\\|D\\|C", 
+                      "B\\|A\\|C\\|D", "B\\|A\\|D\\|C",
+                      "C\\|D\\|A\\|B", "C\\|D\\|B\\|A",
+                      "D\\|C\\|A\\|B", "D\\|C\\|B\\|A",
+                      "AB\\|C\\|D\\|", "AB\\|D\\|C\\|",
+                      "CD\\|A\\|B\\|", "CD\\|B\\|A\\|",
+                      "A\\|B\\|CD\\|", "B\\|A\\|CD\\|",
+                      "C\\|D\\|AB\\|", "D\\|C\\|AB\\|",
+                      "AB\\|CD\\|\\|", "CD\\|AB\\|\\|",
+                      "E\\|F\\|G\\|H", "E\\|F\\|H\\|G", 
+                      "F\\|E\\|G\\|H", "F\\|E\\|H\\|G",
+                      "G\\|H\\|E\\|F", "G\\|H\\|F\\|E",
+                      "H\\|G\\|E\\|F", "H\\|G\\|F\\|E",
+                      "EF\\|G\\|H\\|", "EF\\|H\\|G\\|",
+                      "GH\\|E\\|F\\|", "GH\\|F\\|E\\|",
+                      "E\\|F\\|GH\\|", "F\\|E\\|GH\\|",
+                      "G\\|H\\|EF\\|", "H\\|G\\|EF\\|",
+                      "EF\\|GH\\|\\|", "GH\\|EF\\|\\|")
+
+interlaced_patterns <- c("A\\|C\\|B\\|D", "A\\|D\\|B\\|C",
+                         "B\\|C\\|A\\|D", "B\\|D\\|A\\|C",
+                         "C\\|A\\|D\\|B", "C\\|B\\|D\\|A",
+                         "D\\|A\\|C\\|B", "D\\|B\\|C\\|A",
+                         "AC\\|B\\|D\\|", "AC\\|D\\|B\\|",
+                         "AD\\|B\\|C\\|", "AD\\|C\\|B\\|",
+                         "BC\\|A\\|D\\|", "BC\\|D\\|A\\|",
+                         "BD\\|A\\|C\\|",  "BD\\|C\\|A\\|",
+                         "A\\|C\\|BD\\|",  "A\\|D\\|BC\\|",
+                         "B\\|C\\|AD\\|",  "B\\|D\\|AC\\|",
+                         "C\\|A\\|BD\\|",  "C\\|B\\|AD\\|",
+                         "D\\|A\\|BC\\|",  "D\\|B\\|AC\\|",
+                         "E\\|G\\|F\\|H", "E\\|H\\|F\\|G",
+                         "F\\|G\\|E\\|H", "F\\|H\\|E\\|G",
+                         "G\\|E\\|H\\|F", "G\\|F\\|H\\|E",
+                         "H\\|E\\|G\\|F", "H\\|F\\|G\\|E",
+                         "EG\\|F\\|H\\|", "EG\\|H\\|F\\|",
+                         "EH\\|F\\|G\\|", "EH\\|G\\|F\\|",
+                         "FG\\|E\\|H\\|", "FG\\|H\\|E\\|",
+                         "FH\\|E\\|G\\|",  "FH\\|G\\|E\\|",
+                         "E\\|G\\|FH\\|",  "E\\|H\\|FG\\|",
+                         "F\\|G\\|EH\\|",  "F\\|H\\|EG\\|",
+                         "G\\|E\\|FH\\|",  "G\\|F\\|EH\\|",
+                         "H\\|E\\|FG\\|",  "H\\|F\\|EG\\|")
+
+other_patterns <- c("A\\|BC\\|D\\|",
+                    "A\\|BD\\|C\\|",
+                    "B\\|AC\\|D\\|",
+                    "B\\|AD\\|C\\|",
+                    "C\\|BD\\|A\\|",
+                    "C\\|AD\\|B\\|",
+                    "D\\|BC\\|A\\|",
+                    "D\\|AC\\|B\\|",
+                    "ACD\\|B\\|\\|",
+                    "BCD\\|A\\|\\|",
+                    "ABC\\|D\\|\\|",
+                    "ABD\\|C\\|\\|",
+                    "A\\|BCD\\|\\|",
+                    "B\\|ACD\\|\\|",
+                    "C\\|ABD\\|\\|",
+                    "D\\|ABC\\|\\|",
+                    "E\\|FG\\|H\\|",
+                    "E\\|FH\\|G\\|",
+                    "F\\|EG\\|H\\|",
+                    "F\\|EH\\|G\\|",
+                    "G\\|FH\\|E\\|",
+                    "G\\|EH\\|F\\|",
+                    "H\\|FG\\|E\\|",
+                    "H\\|EG\\|F\\|",
+                    "EGH\\|F\\|\\|",
+                    "FGH\\|E\\|\\|",
+                    "EFG\\|H\\|\\|",
+                    "EFH\\|G\\|\\|",
+                    "E\\|FGH\\|\\|",
+                    "F\\|EGH\\|\\|",
+                    "G\\|EFH\\|\\|",
+                    "H\\|EFG\\|\\|")
+```
+
+#### directly-provided rankings
+
+```{r}
+ranking_direct <- df_judgment  |> 
+  filter(sender == "Ranking_Screen") |> 
+  select(id, 
+         condition, 
+         part, 
+         order_one_contents_options, 
+         order_two_contents_options,
+         order_three_contents_options,
+         order_four_contents_options)  |>  
+  unique() 
+
+sort_letters <- function(strings) {
+  sapply(strings, function(x) paste(sort(unlist(strsplit(x, ""))), collapse = ""))
+} 
+#Alphabetically sort the letters within each cell of the columns "order_one_contents_options", "order_two_contents_options", "order_three_contents_options", "order_four_contents_options" 
+#for example convert "DBC" to "BCD"
+
+columns_to_sort <- c("order_one_contents_options", "order_two_contents_options", 
+                     "order_three_contents_options", "order_four_contents_options")
+
+ranking_direct[columns_to_sort] <- lapply(ranking_direct[columns_to_sort], sort_letters)
+
+ranking_direct$concatenated_ranking <- apply(ranking_direct[, columns_to_sort], 1, paste, collapse = "|")
+
+ranking_direct <- ranking_direct |>
+  mutate(provided_logical = as.integer(sapply(concatenated_ranking, function(x) {
+    any(sapply(logical_patterns, function(pattern) grepl(pattern, x)))
+  })))  |>
+  mutate(provided_stacked = as.integer(sapply(concatenated_ranking, function(x) {
+    any(sapply(stacked_patterns, function(pattern) grepl(pattern, x)))
+  }))) |>
+  mutate(provided_interlaced = as.integer(sapply(concatenated_ranking, function(x) {
+    any(sapply(interlaced_patterns, function(pattern) grepl(pattern, x)))
+  })))  |>
+  mutate(provided_other = as.integer(sapply(concatenated_ranking, function(x) {
+    any(sapply(other_patterns, function(pattern) grepl(pattern, x)))
+  }))) |>
+  select(id, condition, part, provided_ranking = concatenated_ranking, 
+         provided_logical, 
+         provided_stacked,
+         provided_interlaced,
+         provided_other) |>
+  mutate(provided_ranking_category = case_when(
+    provided_logical == 1 ~ "Logical",
+    provided_stacked == 1 ~ "Stacked",
+    provided_interlaced == 1 ~ "Interlaced",
+    provided_other == 1 ~ "Other"
+  )) |> 
+  mutate(frequency_condition = 
+           case_when(condition %in% c("A", "B") ~ "20-learning-trial", 
+                     condition %in% c("C", "D") ~ "40-learning-trial",)) |> 
+  mutate(check_sum = provided_logical + provided_stacked + provided_interlaced + provided_other)
+
+ranking_direct$provided_ranking_category <- factor(ranking_direct$provided_ranking_category,
+                                              levels = c( "Logical","Stacked",
+                                                          "Interlaced","Other"),
+                                              labels = c("Logical", "Stacked", "Interlaced", "Other"))
+
+```
+
+#### rankings derived from comparisons
+
+```{r}
+elicit <- df_judgment |> filter (sender == "show_choice") |> 
+  select(id, condition, part, compare1, compare2, response,
+         response_action) |> 
+  mutate(response = case_when(
+    response == "compare1" ~ compare1,
+    response == "compare2" ~ compare2,
+    TRUE ~ NA
+  )) |> 
+  group_by(id, condition, part) |> 
+  count(response) |> 
+  ungroup()
+
+# Define the complete set of response options
+response <- c('A', 'B', 'C', 'D',
+              'E', 'F', 'G', 'H')
+
+all_options <- expand.grid(id = unique(df_judgment$id), 
+                           response= response) 
+
+ranking_comparison <- all_options |> 
+  left_join(elicit, by = c("id", "response")) |> #add options that have never been selected in pairwise comparisons to the “response” column.
+  mutate(n = ifelse(is.na(n), 0, n)) |>
+  group_by(id) |>
+  fill(condition, .direction = "downup") |>   
+  ungroup() |>                               
+  mutate(
+    part = case_when(
+      response %in% c("A", "B", "C", "D") ~ "mid",
+      response %in% c("E", "F", "G", "H") ~ "edge",
+      TRUE                                ~ NA_character_
+    )) |> 
+  group_by(id, part) |> 
+  mutate(rank = dense_rank(desc(n))) |>
+  select(-n) |>
+  pivot_wider(
+    names_from  = rank,
+    values_from = response
+  ) |>
+  select(
+    id, condition, part,
+    order_one   = `1`,
+    order_two   = `2`,
+    order_three = `3`,
+    order_four  = `4`
+  ) |> 
+  mutate(
+    across(
+      starts_with("order"),
+      ~ map_chr(.x, ~ paste(.x, collapse = ","))  
+    )
+  ) |> 
+  ungroup()
+
+ranking_comparison$concatenated_ranking <- apply(ranking_comparison[, c("order_one", 
+                                                "order_two", 
+                                                "order_three", 
+                                                "order_four")], 1, paste, collapse = "|")
+
+ranking_comparison$concatenated_ranking <- gsub(",| ", "", ranking_comparison$concatenated_ranking) #replace "A, B, C" with "ABC"
+
+ranking_comparison <- ranking_comparison |> 
+  mutate(elicited_logical = as.integer(sapply(concatenated_ranking, function(x) {
+    any(sapply(logical_patterns, function(pattern) grepl(pattern, x)))
+  }))) |> 
+  mutate(elicited_stacked = as.integer(sapply(concatenated_ranking, function(x) {
+    any(sapply(stacked_patterns, function(pattern) grepl(pattern, x)))
+  })))|> 
+  mutate(elicited_interlaced = as.integer(sapply(concatenated_ranking, function(x) {
+    any(sapply(interlaced_patterns, function(pattern) grepl(pattern, x)))
+  }))) |> 
+  mutate(elicited_other = as.integer(sapply(concatenated_ranking, function(x) {
+    any(sapply(other_patterns, function(pattern) grepl(pattern, x)))
+  }))) |> 
+  mutate(check_sum = elicited_logical + elicited_stacked + elicited_interlaced + elicited_other) |> 
+  mutate(frequency_condition = case_when(
+    condition %in% c("A", "B") ~ "20-learning-trial",
+    condition %in% c("C", "D") ~ "40-learning-trial",
+    TRUE ~ NA_character_  
+  )) |>
+  select(id, condition, frequency_condition, part, 
+         elicited_ranking = concatenated_ranking,
+         elicited_logical, 
+         elicited_stacked,
+         elicited_interlaced,
+         elicited_other,
+         check_sum) |>
+  mutate(elicited_ranking_category = case_when(
+    elicited_logical == 1 ~ "Logical",
+    elicited_stacked == 1 ~ "Stacked",
+    elicited_interlaced == 1 ~ "Interlaced",
+    elicited_other == 1 ~ "Other"
+  )) 
+
+ranking_comparison$elicited_ranking_category <- factor(ranking_comparison$elicited_ranking_category,
+                                                   levels = c( "Logical","Stacked",
+                                                               "Interlaced","Other"),
+                                                   labels = c("Logical", "Stacked", 
+                                                              "Interlaced", "Other"))
+
+```
+
+### Plot
+
+```{r}
+ranking_direct_subsample <- ranking_direct |> 
+  filter(id %in% subsample_ids)
+
+ranking_comparison_subsample <- ranking_comparison |> 
+  filter(id %in% subsample_ids)
+
+prep <- function(df, catcol, source, sample) {
+  df |> 
+    transmute(id, part, frequency_condition,
+              ranking_category = {{ catcol }},
+              ranking_source = source,
+              sample = sample)
+}
+
+ranking_all <- bind_rows(
+  prep(ranking_direct,               provided_ranking_category, "Directly provided", "Whole sample"),
+  prep(ranking_comparison,           elicited_ranking_category, "Pairwise-derived",  "Whole sample"),
+  prep(ranking_direct_subsample,     provided_ranking_category, "Directly provided", "Subsample"),
+  prep(ranking_comparison_subsample, elicited_ranking_category, "Pairwise-derived",  "Subsample")
+) |> 
+  mutate(
+    sample              = factor(sample, levels = c("Whole sample", "Subsample")),
+    ranking_source      = factor(ranking_source,
+                                 levels = c("Directly provided", "Pairwise-derived")),
+    frequency_condition = factor(frequency_condition,
+                                 levels = c("40-learning-trial", "20-learning-trial"),
+                                 labels = c("40 trials", "20 trials")),
+    part                = factor(part, levels = c("edge", "mid"),
+                                 labels = c("Edge", "Mid")),
+    # reversed so Logical anchors the bottom of each stack
+    ranking_category    = factor(ranking_category,
+                                 levels = c("Other", "Interlaced", "Stacked", "Logical"))
+  ) |> 
+  # row label carrying N, ordered to follow `sample`
+  group_by(sample) |> 
+  mutate(sample_lab = paste0(sample, "\nN = ", n_distinct(id))) |> 
+  ungroup() |> 
+  mutate(sample_lab = fct_reorder(sample_lab, as.integer(sample)))
+
+theme_apa <- theme_classic(base_size = 11) +
+  theme(
+    axis.text        = element_text(size = 10, colour = "black"),
+    axis.line        = element_line(colour = "black", linewidth = 0.4),
+    axis.ticks       = element_line(colour = "black", linewidth = 0.4),
+    strip.background = element_rect(fill = NA, colour = "black", linewidth = 0.4),
+    strip.text.x     = element_text(size = 10, margin = margin(3, 3, 3, 3)),
+    strip.text.y     = element_text(size = 10, angle = -90,
+                                    margin = margin(3, 3, 3, 3)),
+    legend.position  = "bottom",
+    legend.key.size  = unit(0.8, "lines"),
+    panel.spacing.x  = unit(0, "lines"),
+    panel.spacing.y  = unit(0.7, "lines")
+  )
+
+p_apa <- ggplot(ranking_all, aes(x = part, fill = ranking_category)) +
+  geom_bar(position = "fill", width = 0.55, colour = "white", linewidth = 0.2) +
+  facet_nested(sample_lab ~ ranking_source + frequency_condition) +
+  scale_y_continuous(labels = percent_format(accuracy = 1),
+                     expand = expansion(mult = c(0, 0.02))) +
+  scale_fill_manual(
+    name   = "Ranking type",
+    values = c(Logical = "#009E73", Stacked = "#F0E442",
+               Interlaced = "#CC79A7", Other = "#0072B2"),
+    breaks = c("Logical", "Stacked", "Interlaced", "Other")
+  ) +
+  guides(fill = guide_legend(reverse = TRUE, nrow = 1)) +
+  labs(x = "Event set type", y = "Percentage of participants") +
+  theme_apa
+
+p_apa
+
+ggsave("judgment.pdf", p_apa, width = 7, height = 5.5, units = "in")
+```
+
+### MPT analysis
+
+```{r}
+# Quick checks: every ranking falls in exactly one category,
+# and there is exactly one ranking per participant and event set
+stopifnot(all(ranking_direct$check_sum == 1))
+stopifnot(all(ranking_comparison$check_sum == 1))
+stopifnot(!any(duplicated(ranking_direct[, c("id", "part")])))
+stopifnot(!any(duplicated(ranking_comparison[, c("id", "part")])))
+
+count_cells <- function(df, logical, other, stacked, interlaced) {
+  df |>
+    group_by(frequency_condition, part) |>
+    summarise(logical    = sum({{ logical }}),
+              other      = sum({{ other }}),
+              stacked    = sum({{ stacked }}),
+              interlaced = sum({{ interlaced }}),
+              n          = n(),
+              .groups    = "drop")
+}
+
+counts_direct <- count_cells(ranking_direct,
+                             provided_logical, provided_other,
+                             provided_stacked, provided_interlaced)
+
+counts_comparison <- count_cells(ranking_comparison,
+                                 elicited_logical, elicited_other,
+                                 elicited_stacked, elicited_interlaced)
+
+counts_direct
+counts_comparison
+
+# prepare data in the format that MPTinR wants 
+one_tree <- function(counts, cond, set) {
+  row <- counts |> filter(frequency_condition == cond, part == set)
+  c(row$logical, row$other, row$stacked, row$interlaced)
+}
+
+data_vector <- function(counts) {
+  c(one_tree(counts, "20-learning-trial", "edge"),   # tree 1: edge20
+    one_tree(counts, "20-learning-trial", "mid"),    # tree 2: mid20
+    one_tree(counts, "40-learning-trial", "edge"),   # tree 3: edge40
+    one_tree(counts, "40-learning-trial", "mid"))    # tree 4: mid40
+}
+
+data_direct     <- data_vector(counts_direct)
+data_comparison <- data_vector(counts_comparison)
+data_direct
+data_comparison
+```
+
+```{r}
+# ---------------------- The preregistered four-tree model
+model_unrestricted <- c(
+  # tree 1: edge event set, 20 learning trials
+  "le20",
+  "(1-le20)*oe20",
+  "(1-le20)*(1-oe20)*se20",
+  "(1-le20)*(1-oe20)*(1-se20)",
+  "",
+  # tree 2: mid event set, 20 learning trials
+  "lm20",
+  "(1-lm20)*om20",
+  "(1-lm20)*(1-om20)*sm20",
+  "(1-lm20)*(1-om20)*(1-sm20)",
+  "",
+  # tree 3: edge event set, 40 learning trials
+  "le40",
+  "(1-le40)*oe40",
+  "(1-le40)*(1-oe40)*se40",
+  "(1-le40)*(1-oe40)*(1-se40)",
+  "",
+  # tree 4: mid event set, 40 learning trials
+  "lm40",
+  "(1-lm40)*om40",
+  "(1-lm40)*(1-om40)*sm40",
+  "(1-lm40)*(1-om40)*(1-sm40)"
+)
+
+model_file <- tempfile(fileext = ".model")
+writeLines(model_unrestricted, model_file)
+
+check.mpt(model_file)   # expect: 4 trees, 16 categories, 12 parameters
+
+fit_direct     <- fit.mpt(data_direct, model_file)
+fit_direct
+
+fit_comparison <- fit.mpt(data_comparison, model_file)
+fit_comparison
+```
+
+```{r}
+# Because the model is saturated, every parameter is simply an observed
+# proportion:
+#   l = logical / n
+#   O = other   / (n - logical)
+#   S = stacked / (n - logical - other)
+# so exact (Clopper-Pearson) 95% CIs come from binom.test().
+# MPTinR's own CIs are Wald intervals and go below 0 for small parameters
+# (e.g. oe20, oe40)
+
+exact_ci_table <- function(counts) {
+  out <- data.frame()
+  for (i in 1:nrow(counts)) {
+    r      <- counts[i, ]
+    suffix <- paste0(ifelse(r$part == "edge", "e", "m"),
+                     ifelse(r$frequency_condition == "20-learning-trial", "20", "40"))
+    x <- c(r$logical, r$other,          r$stacked)
+    n <- c(r$n,       r$n - r$logical,  r$n - r$logical - r$other)
+    for (j in 1:3) {
+      ci  <- binom.test(x[j], n[j])$conf.int
+      out <- rbind(out, data.frame(
+        parameter   = paste0(c("l", "o", "s")[j], suffix),
+        numerator   = x[j],
+        denominator = n[j],
+        estimate    = x[j] / n[j],
+        ci_lower    = ci[1],
+        ci_upper    = ci[2]))
+    }
+  }
+  out |> mutate(across(c(estimate, ci_lower, ci_upper), ~ round(.x, 3)))
+}
+
+ci_direct     <- exact_ci_table(counts_direct)
+ci_comparison <- exact_ci_table(counts_comparison)
+
+ci_direct
+ci_comparison
+```
+
+```{r}
+# Sanity check: the proportions must equal MPTinR's estimates. If this fails,
+stopifnot(max(abs(ci_direct$estimate -
+                    fit_direct$parameters[ci_direct$parameter, "estimates"])) < 0.001)
+stopifnot(max(abs(ci_comparison$estimate -
+                    fit_comparison$parameters[ci_comparison$parameter, "estimates"])) < 0.001)
+```
+
+```{r}
+# ----------------------- Preregistered hypotheses: likelihood-ratio tests
+# ---------- main hypotheses:c("le20", "om20", "sm20", "le40", "om40", "sm40") > c("lm20", "oe20", "se20", "lm40", "oe40", "se40")
+# ---------- secondary research question: c("le20", "lm20", "om40", "sm40") > c("le40", "lm40", "om20", "sm20")
+# Each hypothesis says "larger > smaller". We fit a model in which the two
+# parameters are forced to be EQUAL and compare it with the unrestricted model:
+#   G2 difference (df = 1) large  ->  the two parameters differ.
+# Then we check whether the difference goes in the predicted direction.
+
+hypotheses <- data.frame(
+  rq      = c(rep("Main", 6), rep("RQ b", 4)),
+  larger  = c("le20", "om20", "sm20", "le40", "om40", "sm40",
+              "le20", "lm20", "om40", "sm40"),
+  smaller = c("lm20", "oe20", "se20", "lm40", "oe40", "se40",
+              "le40", "lm40", "om20", "sm20")
+)
+
+lrt_table <- function(data, fit_unrestricted) {
+  out <- data.frame()
+  for (i in 1:nrow(hypotheses)) {
+    larger  <- hypotheses$larger[i]
+    smaller <- hypotheses$smaller[i]
+    
+    fit_restricted <- fit.mpt(data, model_file,
+                              restrictions.filename = list(paste(smaller, "=", larger)),
+                              show.messages = FALSE)
+    
+    G2 <- fit_restricted$goodness.of.fit$G.Squared - fit_unrestricted$goodness.of.fit$G.Squared
+    df <- fit_restricted$goodness.of.fit$df        - fit_unrestricted$goodness.of.fit$df
+    
+    est_larger  <- fit_unrestricted$parameters[larger,  "estimates"]
+    est_smaller <- fit_unrestricted$parameters[smaller, "estimates"]
+    
+    out <- rbind(out, data.frame(
+      rq           = hypotheses$rq[i],
+      hypothesis   = paste(larger, ">", smaller),
+      est_larger   = est_larger,
+      est_smaller  = est_smaller,
+      direction_ok = est_larger > est_smaller,
+      G2           = G2,
+      df           = df,
+      p            = pchisq(G2, df, lower.tail = FALSE),
+      # positive dAIC / dBIC = the unrestricted model (parameters differ) is preferred
+      dAIC         = fit_restricted$information.criteria$AIC - fit_unrestricted$information.criteria$AIC,
+      dBIC         = fit_restricted$information.criteria$BIC - fit_unrestricted$information.criteria$BIC))
+  }
+  rownames(out) <- NULL
+  out |> mutate(across(c(est_larger, est_smaller, G2, dAIC, dBIC), ~ round(.x, 3)),
+                p = round(p, 4))
+}
+
+lrt_direct     <- lrt_table(data_direct,     fit_direct)
+lrt_comparison <- lrt_table(data_comparison, fit_comparison)
+
+lrt_direct
+lrt_comparison
+```
+
+```{r}
+# 5. RQ: agreement between the two elicitation methods (Cohen's kappa)
+
+# Sort the letters inside each tie slot ("A|DC|B|" -> "A|CD|B|") so that the
+# two methods write the same ranking the same way before we compare them.
+sort_slots <- function(ranking) {
+  sapply(strsplit(ranking, "\\|"), function(slots) {
+    paste(sapply(slots, function(s) paste(sort(strsplit(s, "")[[1]]), collapse = "")),
+          collapse = "|")
+  })
+}
+
+agreement <- ranking_direct |>
+  select(id, part, frequency_condition, provided_ranking, provided_ranking_category) |>
+  inner_join(ranking_comparison |>
+               select(id, part, elicited_ranking, elicited_ranking_category),
+             by = c("id", "part")) |>
+  mutate(provided_ranking = sort_slots(provided_ranking),
+         elicited_ranking = sort_slots(elicited_ranking))
+
+stopifnot(nrow(agreement) == nrow(ranking_direct))
+
+# preregistered: agreement on the exact ranking
+kappa_ranking <- kappa2(agreement[, c("provided_ranking", "elicited_ranking")])
+kappa_ranking
+mean(agreement$provided_ranking == agreement$elicited_ranking)   # proportion identical
+
+# supplementary: agreement on the ranking category
+kappa_category <- kappa2(agreement[, c("provided_ranking_category", "elicited_ranking_category")])
+kappa_category
+mean(agreement$provided_ranking_category == agreement$elicited_ranking_category)
+```
+
+##### Subsample for robustness analyses 
+
+```{r}
+length(subsample_ids)     # expect 310
+
+ranking_direct_sub     <- ranking_direct     |> filter(id %in% subsample_ids)
+ranking_comparison_sub <- ranking_comparison |> filter(id %in% subsample_ids)
+
+# every subsample id should have one ranking per event set in both files
+stopifnot(nrow(ranking_direct_sub)     == 2 * length(subsample_ids))
+stopifnot(nrow(ranking_comparison_sub) == 2 * length(subsample_ids))
+
+counts_direct_sub <- count_cells(ranking_direct_sub,
+                                 provided_logical, provided_other,
+                                 provided_stacked, provided_interlaced)
+
+counts_comparison_sub <- count_cells(ranking_comparison_sub,
+                                     elicited_logical, elicited_other,
+                                     elicited_stacked, elicited_interlaced)
+
+counts_direct_sub       # expect n = 147 (20 trials) and 163 (40 trials)
+counts_comparison_sub
+
+data_direct_sub     <- data_vector(counts_direct_sub)
+data_comparison_sub <- data_vector(counts_comparison_sub)
+
+data_direct_sub
+data_comparison_sub
+
+# some cells are empty 
+#"other" in edge20 for the direct rankings
+# "stacked" in edge20 for the pairwise-derived rankings
+
+fit_direct_sub     <- fit.mpt(data_direct_sub,     model_file, show.messages = FALSE)
+fit_comparison_sub <- fit.mpt(data_comparison_sub, model_file, show.messages = FALSE)
+
+fit_direct_sub$goodness.of.fit          # G2 = 0, df = 0 (saturated)
+fit_comparison_sub$goodness.of.fit
+
+ci_direct_sub     <- exact_ci_table(counts_direct_sub)
+ci_comparison_sub <- exact_ci_table(counts_comparison_sub)
+
+# An empty cell gives an estimate of exactly 0. The exact CI handles this
+# (e.g. [.000, .08]); MPTinR's Wald CI would be [0, 0], which is meaningless.
+ci_direct_sub
+ci_comparison_sub
+
+stopifnot(max(abs(ci_direct_sub$estimate -
+                    fit_direct_sub$parameters[ci_direct_sub$parameter, "estimates"])) < 0.001)
+stopifnot(max(abs(ci_comparison_sub$estimate -
+                    fit_comparison_sub$parameters[ci_comparison_sub$parameter, "estimates"])) < 0.001)
+
+```
+
+```{r}
+# -------------------------------- Preregistered hypotheses: likelihood-ratio tests
+
+lrt_direct_sub     <- lrt_table(data_direct_sub,     fit_direct_sub)
+lrt_comparison_sub <- lrt_table(data_comparison_sub, fit_comparison_sub)
+
+lrt_direct_sub
+lrt_comparison_sub
+
+# CAUTION: tests involving a parameter estimated from a very small or empty
+# cell (om20 > oe20 in the direct rankings, sm20 > se20 in the pairwise
+# rankings) rely on the chi-square approximation with sparse data. If one of
+# these is close to p = .05, check it with the bootstrap in block F of
+# 02_judgment_additional.R, e.g.:
+#   boot_lrt_p(data_direct_sub,     "om20", "oe20")
+#   boot_lrt_p(data_comparison_sub, "sm20", "se20")
+```
+
+```{r}
+# ------------------------- Cohen's kappa
+
+agreement_sub <- ranking_direct_sub |>
+  select(id, part, frequency_condition, provided_ranking, provided_ranking_category) |>
+  inner_join(ranking_comparison_sub |>
+               select(id, part, elicited_ranking, elicited_ranking_category),
+             by = c("id", "part")) |>
+  mutate(provided_ranking = sort_slots(provided_ranking),
+         elicited_ranking = sort_slots(elicited_ranking))
+
+stopifnot(nrow(agreement_sub) == nrow(ranking_direct_sub))
+
+kappa_ranking_sub <- kappa2(agreement_sub[, c("provided_ranking", "elicited_ranking")])
+kappa_ranking_sub
+mean(agreement_sub$provided_ranking == agreement_sub$elicited_ranking)
+
+kappa_category_sub <- kappa2(agreement_sub[, c("provided_ranking_category", "elicited_ranking_category")])
+kappa_category_sub
+mean(agreement_sub$provided_ranking_category == agreement_sub$elicited_ranking_category)
+```
+
+```{r}
+# ------------ Side-by-side comparison with the whole sample
+# Does any conclusion change when only satisfactory learners are analysed?
+
+# ---- Parameter estimates ------------------------------------------------------
+compare_estimates <- function(ci_whole, ci_sub) {
+  ci_whole |>
+    select(parameter, whole = estimate) |>
+    left_join(ci_sub |> select(parameter, sub = estimate,
+                               sub_lower = ci_lower, sub_upper = ci_upper),
+              by = "parameter") |>
+    mutate(change = round(sub - whole, 3))
+}
+
+estimates_compared_direct     <- compare_estimates(ci_direct,     ci_direct_sub)
+estimates_compared_comparison <- compare_estimates(ci_comparison, ci_comparison_sub)
+
+estimates_compared_direct
+estimates_compared_comparison
+
+# Summary of how much the estimates moved (for the robustness paragraph)
+all_changes <- abs(c(estimates_compared_direct$change,
+                     estimates_compared_comparison$change))
+data.frame(median_abs_change = median(all_changes),
+           max_abs_change    = max(all_changes))
+
+
+# ---- Hypothesis tests ---------------------------------------------------------
+# A conclusion counts as "changed" only if
+#   (a) the test is significant in one sample but not in the other, or
+#   (b) the test is significant in both samples but in opposite directions.
+# The direction of a NON-significant difference is not interpreted, so a sign
+# flip between two non-significant tests (e.g. .759 vs .778 -> .776 vs .767)
+# does not count as a change.
+
+compare_tests <- function(lrt_whole, lrt_sub) {
+  lrt_whole |>
+    select(rq, hypothesis,
+           direction_whole = direction_ok, G2_whole = G2, p_whole = p) |>
+    left_join(lrt_sub |>
+                select(hypothesis,
+                       direction_sub = direction_ok, G2_sub = G2, p_sub = p),
+              by = "hypothesis") |>
+    mutate(sig_whole       = p_whole < .05,
+           sig_sub         = p_sub   < .05,
+           same_conclusion = (sig_whole == sig_sub) &
+             (!sig_whole | direction_whole == direction_sub))
+}
+
+tests_compared_direct     <- compare_tests(lrt_direct,     lrt_direct_sub)
+tests_compared_comparison <- compare_tests(lrt_comparison, lrt_comparison_sub)
+
+tests_compared_direct
+tests_compared_comparison
+
+# Which conclusions change? 
+# -> only om40 > oe40, pairwise-derived)
+tests_compared_direct     |> filter(!same_conclusion)
+tests_compared_comparison |> filter(!same_conclusion)
+
+# ---- Cohen's kappa ------------------------------------------------------------
+data.frame(sample         = c("Whole", "Subsample"),
+           n_rankings     = c(nrow(agreement), nrow(agreement_sub)),
+           kappa_ranking  = round(c(kappa_ranking$value,  kappa_ranking_sub$value),  3),
+           kappa_category = round(c(kappa_category$value, kappa_category_sub$value), 3))
+
+```
