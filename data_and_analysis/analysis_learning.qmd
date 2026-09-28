@@ -519,7 +519,7 @@ fit_cum("20")
 fit_cum("40")
 ```
 
-### Subsample preparation for robustness analysis 
+### Subsample preparation for robustness analysis
 
 Criterion: over the last 10 learning trials for each edge pair (the final two 5-trial bins), the participant predicted event *A* on more than half of trials. Both edge pairs must pass.
 

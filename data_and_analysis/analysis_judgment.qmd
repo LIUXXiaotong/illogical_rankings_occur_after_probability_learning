@@ -641,7 +641,7 @@ kappa_category
 mean(agreement$provided_ranking_category == agreement$elicited_ranking_category)
 ```
 
-##### Subsample for robustness analyses 
+##### Subsample for robustness analyses
 
 ```{r}
 length(subsample_ids)     # expect 310
