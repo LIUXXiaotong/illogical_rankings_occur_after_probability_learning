@@ -37,13 +37,13 @@ Broccoli and radish are a pair of mutually exclusive items: broccoli and radish 
 
 We always coded/represented the two events of drawing each of one pair of mutually exclusive items using the notation A, not-A.
 
-Strawberry vs Orange —\> A (0.5) v.s. not-A (0.5)
+Strawberry vs Orange —\> A (0.5) vs not-A (0.5)
 
-Banana vs Cherry —\> A (0.6) v.s. not-A (0.4)
+Banana vs Cherry —\> A (0.6) vs not-A (0.4)
 
-Carrot versus Tomato —\> A (0.8) v.s. not-A (0.2)
+Carrot vs Tomato —\> A (0.8) vs not-A (0.2)
 
-Broccoli versus Radish —\> A (0.9) v.s. not-A (0.1)
+Broccoli vs Radish —\> A (0.9) vs. not-A (0.1)
 
 ### Dataset preparation
 
