@@ -1,0 +1,675 @@
+---
+title: "Simulation varying the widths of the underlying distributions to derive predictions for the 20-learning-trial condition versus the 40-learning-trial condition"
+subtitle: "Mid-event and edge-event sets × five distribution widths × two noise levels (d = 0 and d = 0.3), sample sizes 1–20 and 25–50"
+date: today
+params:
+  nsim: 10000          # probability draws per condition; use 200 for a quick test
+format:
+  html:
+    embed-resources: true      
+    html-math-method: mathml   
+    theme: default              
+    toc: true
+    toc-location: left
+    toc-depth: 2
+    number-sections: true
+    code-fold: true
+    code-tools:
+      source: true             
+      toggle: true
+    code-summary: "Show code"
+    fig-dpi: 150
+    fig-width: 8
+execute:
+  warning: true
+  message: true
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(tidyverse)
+library(matrixStats)
+library(parallel)
+library(knitr)
+library(base64enc)
+```
+
+# Overview
+
+This document runs the whole simulation and reports the results. The code is folded under **Show code**, and the full source can be viewed with the **</> Code** button at the top right.
+
+An estimator judges the probabilities of four events: $A$, $\neg A$, $B$ and $\neg B$. Each estimate is a count of how often the event occurred in a sample of $N$ items. Each count is drawn independently:
+
+$$C_e \sim \text{Binomial}(N,\; p_e'), \qquad p_e' = (1-2d)\,p_e + d$$
+
+Here $p_e$ is the true probability and $d$ is the PT+N noise rate. Each sampled item is misread with probability $d$, which pulls the estimates towards 0.5.
+
+The four counts are then ranked. Because $P(A) + P(\neg A) = 1$ and $P(B) + P(\neg B) = 1$, only some rankings are logically possible. The simulation computes the exact probability of every one of the 75 possible rankings, ties included. It then groups them into four types:
+
+| Ranking type | Meaning | Example |
+|---|---|---|
+| **Logical** | A ranking that some true probabilities could produce | $A > B > \neg B > \neg A$ |
+| **Stacked-illogical** | Each event ranked next to its own complement | $A > \neg A > B > \neg B$ |
+| **Interlaced-illogical** | The two complement pairs interlaced | $A > B > \neg A > \neg B$ |
+| **Other-illogical** | An impossible tie that could break into a stacked *or* an interlaced ranking | $A > B = \neg A > \neg B$ |
+
+Ties are categorised directly; they are never broken at random.
+
+The results are reported in two ways: first as the distribution of all four types together, then decomposed into three steps, each a conditional probability (see @sec-decomposition).
+
+# Settings
+
+There are two **event sets**, each with five **widths** of the distribution of true probabilities:
+
+- **Mid-event set:** true probabilities near the middle of the scale, with mean $P(A) = 0.5$ and mean $P(B) = 0.4$.
+- **Edge-event set:** true probabilities near the edges of the scale, with mean $P(A) = 0.1$ and mean $P(B) = 0.2$, so $\neg A \approx 0.9$ and $\neg B \approx 0.8$.
+
+Within each set the means stay fixed and the Beta parameters grow, so the probabilities become more tightly concentrated from width 1 (widest) to width 5 (narrowest). Every condition is run without noise (d = 0) and with noise (d = 0.3).
+
+```{r}
+#| label: settings
+nsim        <- params$nsim   # probability draws per condition
+sample_size <- c(1:20, seq(25, 50, by = 5))   # 1, 2, ..., 20, 25, 30, ..., 50
+d_values    <- c(0, 0.3)     # PT+N noise rates
+seed        <- 123
+
+width_levels <- c("1 (widest)", "2", "3", "4", "5 (narrowest)")
+conditions <- tibble(
+  event_set = rep(c("Mid-event", "Edge-event"), each = 5),
+  width     = rep(1:5, times = 2),
+  A_shape1  = c( 5, 10, 15, 20, 25,   1,  2,  3,  4,  5),
+  A_shape2  = c( 5, 10, 15, 20, 25,   9, 18, 27, 36, 45),
+  B_shape1  = c( 4,  8, 12, 16, 20,   2,  4,  6,  8, 10),
+  B_shape2  = c( 6, 12, 18, 24, 30,   8, 16, 24, 32, 40)
+) %>%
+  mutate(event_set   = factor(event_set, levels = c("Mid-event", "Edge-event")),
+         width_label = factor(width_levels[width], levels = width_levels),
+         condition   = sprintf("Beta(%g, %g) & Beta(%g, %g)", A_shape1, A_shape2, B_shape1, B_shape2),
+         condition   = fct_inorder(condition))
+
+# Ordered single-hue ramp for width: lightest = widest, darkest = narrowest
+width_colours <- setNames(c("#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281"), width_levels)
+```
+
+Each condition draws `r format(nsim, big.mark = ",")` pairs of true probabilities, with $P(A)$ from the first Beta distribution and $P(B)$ from the second. The draws use seed `r seed`, and $A$ is drawn before $B$. The same draws are used for every sample size and both noise levels, so any difference between results comes from $N$ or $d$, not from different draws.
+
+```{r}
+#| label: tbl-conditions
+#| tbl-cap: "The ten conditions. Within each event set the means are fixed; the standard deviations shrink from width 1 to width 5."
+beta_mean <- function(a, b) a / (a + b)
+beta_sd   <- function(a, b) sqrt(a * b / ((a + b)^2 * (a + b + 1)))
+conditions %>%
+  transmute(`Event set` = event_set, Width = width_label,
+            `P(A)` = sprintf("Beta(%g, %g)", A_shape1, A_shape2),
+            `Mean P(A)` = round(beta_mean(A_shape1, A_shape2), 2),
+            `SD P(A)` = round(beta_sd(A_shape1, A_shape2), 3),
+            `P(B)` = sprintf("Beta(%g, %g)", B_shape1, B_shape2),
+            `Mean P(B)` = round(beta_mean(B_shape1, B_shape2), 2),
+            `SD P(B)` = round(beta_sd(B_shape1, B_shape2), 3)) %>%
+  kable()
+```
+
+```{r}
+#| label: fig-beta
+#| fig-cap: "Distributions of the true probabilities in each condition. Rows are event sets; colour shows width, from widest (light) to narrowest (dark)."
+#| fig-height: 5.5
+theme_report <- theme_minimal(base_size = 11) +
+  theme(panel.grid.minor   = element_blank(),
+        panel.grid.major   = element_line(colour = "#e1e0d9", linewidth = 0.3),
+        axis.text          = element_text(colour = "#52514e"),
+        axis.title         = element_text(colour = "#52514e"),
+        strip.text         = element_text(colour = "#0b0b0b", face = "bold", hjust = 0),
+        legend.position    = "bottom",
+        legend.text        = element_text(colour = "#52514e"),
+        legend.title       = element_text(colour = "#52514e"),
+        plot.background    = element_rect(fill = "#fcfcfb", colour = NA),
+        panel.spacing      = unit(1.2, "lines"))
+
+grid_x <- seq(0.001, 0.999, length.out = 500)
+conditions %>%
+  rowwise() %>%
+  reframe(event_set, width_label,
+          x = c(grid_x, grid_x),
+          event = rep(c("P(A)", "P(B)"), each = length(grid_x)),
+          density = c(dbeta(grid_x, A_shape1, A_shape2), dbeta(grid_x, B_shape1, B_shape2))) %>%
+  ggplot(aes(x, density, colour = width_label)) +
+  geom_line(linewidth = 0.7) +
+  facet_grid(event_set ~ event, scales = "free_y") +
+  scale_colour_manual(values = width_colours) +
+  labs(x = "True probability", y = "Density", colour = "Width") +
+  theme_report
+```
+
+# The model
+
+## Rank probabilities
+
+A ranking with ties splits the four events into groups that share the same count, with the groups strictly ordered. For example, $A = B > C > D$ has the groups $\{A, B\}$, $\{C\}$, $\{D\}$. Its probability is
+
+$$P = \sum_{k_1 > k_2 > \dots > k_m} \; \prod_{g=1}^{m} \; \prod_{e \in g} P(C_e = k_g).$$
+
+Instead of listing every combination of counts, the sum is built from the bottom group upwards using running totals. This gives the same number exactly, for all probability draws at once.
+
+```{r}
+#| label: model
+# PMF matrix: one row per probability draw, column k+1 = P(Binomial(N, p) = k)
+binom_pmf <- function(N, p) {
+  stopifnot(N >= 1, all(p >= 0 & p <= 1))
+  matrix(dbinom(rep(0:N, each = length(p)), N, p), nrow = length(p))
+}
+
+# Probability of a weak ordering. `groups` runs from top to bottom; each element
+# is a list of the PMF matrices of the events tied in that group.
+pr_weak_order <- function(groups) {
+  q <- lapply(groups, function(g) Reduce(`*`, g))   # P(all events in the group have count k)
+  n_col <- ncol(q[[1]])
+  F <- q[[length(q)]]
+  if (length(q) > 1) {
+    for (g in (length(q) - 1):1) {
+      below <- rowCumsums(F)                              # lower groups, top count <= k
+      below <- cbind(0, below[, -n_col, drop = FALSE])    # shift: strictly below k
+      F <- q[[g]] * below
+    }
+  }
+  rowSums(F)
+}
+
+# Named shapes, in the same argument order as the original code
+pr_linear           <- function(A, B, C, D) pr_weak_order(list(list(A), list(B), list(C), list(D)))  # A > B > C > D
+pr_one_pair_case_1  <- function(A, B, C, D) pr_weak_order(list(list(A, B), list(C), list(D)))        # A = B > C > D
+pr_one_pair_case_2  <- function(A, B, C, D) pr_weak_order(list(list(A), list(B, C), list(D)))        # A > B = C > D
+pr_one_pair_case_3  <- function(A, B, C, D) pr_weak_order(list(list(A), list(B), list(C, D)))        # A > B > C = D
+pr_three_tied_case1 <- function(A, B, C, D) pr_weak_order(list(list(A, B, C), list(D)))              # A = B = C > D
+pr_three_tied_case2 <- function(A, B, C, D) pr_weak_order(list(list(A), list(B, C, D)))              # A > B = C = D
+pr_two_pairs        <- function(A, B, C, D) pr_weak_order(list(list(A, B), list(C, D)))              # A = B > C = D
+pr_all_equal        <- function(A, B, C, D) pr_weak_order(list(list(A, B, C, D)))                    # A = B = C = D
+
+# All 75 rankings from PMF matrices of A, not-A, B, not-B
+rank_probs_from_pmf <- function(a, na, b, nb) {
+  cbind(
+    r1  = pr_linear(a, b, nb, na),  r2  = pr_linear(a, b, na, nb),  r3  = pr_linear(a, nb, b, na),
+    r4  = pr_linear(a, nb, na, b),  r5  = pr_linear(a, na, b, nb),  r6  = pr_linear(a, na, nb, b),
+    r7  = pr_linear(b, a, nb, na),  r8  = pr_linear(b, a, na, nb),  r9  = pr_linear(b, nb, a, na),
+    r10 = pr_linear(b, nb, na, a),  r11 = pr_linear(b, na, a, nb),  r12 = pr_linear(b, na, nb, a),
+    r13 = pr_linear(nb, a, b, na),  r14 = pr_linear(nb, a, na, b),  r15 = pr_linear(nb, b, a, na),
+    r16 = pr_linear(nb, b, na, a),  r17 = pr_linear(nb, na, a, b),  r18 = pr_linear(nb, na, b, a),
+    r19 = pr_linear(na, a, b, nb),  r20 = pr_linear(na, a, nb, b),  r21 = pr_linear(na, b, a, nb),
+    r22 = pr_linear(na, b, nb, a),  r23 = pr_linear(na, nb, a, b),  r24 = pr_linear(na, nb, b, a),
+    h1  = pr_one_pair_case_1(a, na, b, nb),  h2  = pr_one_pair_case_1(a, na, nb, b),
+    h3  = pr_one_pair_case_1(a, b, na, nb),  h4  = pr_one_pair_case_1(a, b, nb, na),
+    h5  = pr_one_pair_case_1(a, nb, na, b),  h6  = pr_one_pair_case_1(a, nb, b, na),
+    h7  = pr_one_pair_case_1(na, b, a, nb),  h8  = pr_one_pair_case_1(na, b, nb, a),
+    h9  = pr_one_pair_case_1(na, nb, a, b),  h10 = pr_one_pair_case_1(na, nb, b, a),
+    h11 = pr_one_pair_case_1(b, nb, a, na),  h12 = pr_one_pair_case_1(b, nb, na, a),
+    h13 = pr_one_pair_case_2(a, b, nb, na),  h14 = pr_one_pair_case_2(na, b, nb, a),
+    h15 = pr_one_pair_case_2(a, b, na, nb),  h16 = pr_one_pair_case_2(nb, b, na, a),
+    h17 = pr_one_pair_case_2(a, nb, na, b),  h18 = pr_one_pair_case_2(b, nb, na, a),
+    h19 = pr_one_pair_case_2(na, b, a, nb),  h20 = pr_one_pair_case_2(nb, b, a, na),
+    h21 = pr_one_pair_case_2(na, nb, a, b),  h22 = pr_one_pair_case_2(b, nb, a, na),
+    h23 = pr_one_pair_case_2(b, na, a, nb),  h24 = pr_one_pair_case_2(nb, a, na, b),
+    h25 = pr_one_pair_case_3(a, na, b, nb),  h26 = pr_one_pair_case_3(na, a, b, nb),
+    h27 = pr_one_pair_case_3(a, b, na, nb),  h28 = pr_one_pair_case_3(b, a, na, nb),
+    h29 = pr_one_pair_case_3(a, nb, na, b),  h30 = pr_one_pair_case_3(nb, a, na, b),
+    h31 = pr_one_pair_case_3(na, b, a, nb),  h32 = pr_one_pair_case_3(b, na, a, nb),
+    h33 = pr_one_pair_case_3(na, nb, a, b),  h34 = pr_one_pair_case_3(nb, na, a, b),
+    h35 = pr_one_pair_case_3(b, nb, a, na),  h36 = pr_one_pair_case_3(nb, b, a, na),
+    s1 = pr_three_tied_case1(a, na, b, nb),  s2 = pr_three_tied_case1(a, na, nb, b),
+    s3 = pr_three_tied_case1(a, b, nb, na),  s4 = pr_three_tied_case1(na, b, nb, a),
+    s5 = pr_three_tied_case2(a, na, b, nb),  s6 = pr_three_tied_case2(na, a, nb, b),
+    s7 = pr_three_tied_case2(b, a, nb, na),  s8 = pr_three_tied_case2(nb, b, na, a),
+    t1 = pr_two_pairs(a, na, b, nb),  t2 = pr_two_pairs(b, nb, a, na),
+    t3 = pr_two_pairs(a, b, na, nb),  t4 = pr_two_pairs(a, nb, na, b),
+    t5 = pr_two_pairs(na, b, a, nb),  t6 = pr_two_pairs(na, nb, a, b),
+    e1 = pr_all_equal(a, na, b, nb)
+  )
+}
+
+# All 75 rankings for sample size n and vectors of probabilities
+get_diff_rates <- function(n, a, na, b, nb) {
+  rank_probs_from_pmf(binom_pmf(n, a), binom_pmf(n, na), binom_pmf(n, b), binom_pmf(n, nb))
+}
+
+# Categories (ties kept, no tie-breaking)
+ranking_categories <- list(
+  logical    = c("r1", "r3", "r8", "r11", "r14", "r17", "r22", "r24",
+              "h13", "h14", "h23", "h24", "t3", "t4", "t5", "t6", "e1"),
+  stacked    = c("r5", "r6", "r9", "r10", "r15", "r16", "r19", "r20",
+              "h1", "h2", "h11", "h12", "h25", "h26", "h35", "h36", "t1", "t2"),
+  interlaced = c("r2", "r4", "r7", "r12", "r13", "r18", "r21", "r23",
+              "h3", "h4", "h5", "h6", "h7", "h8", "h9", "h10",
+              "h27", "h28", "h29", "h30", "h31", "h32", "h33", "h34"),
+  other      = c("h15", "h16", "h17", "h18", "h19", "h20", "h21", "h22",
+              "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8")
+)
+stopifnot(length(unlist(ranking_categories)) == 75, !anyDuplicated(unlist(ranking_categories)))
+
+# Per-draw category totals (rows = draws)
+categorise_with_ties <- function(rates) {
+  stopifnot(setequal(unlist(ranking_categories), colnames(rates)))
+  cats <- sapply(ranking_categories, function(cols) rowSums(rates[, cols, drop = FALSE]))
+  cbind(cats, check = rowSums(cats))
+}
+```
+
+## The 75 rankings
+
+Each ranking is identified by giving each event a fixed count, so that exactly one ranking has probability 1. This confirms that the 75 definitions are all different and together cover every possible ranking.
+
+```{r}
+#| label: ranking-catalogue
+events <- c("A", "&not;A", "B", "&not;B")   # HTML entities: display correctly whatever the R locale
+dense_rank <- function(v) match(v, sort(unique(v), decreasing = TRUE))   # 1 = highest count
+
+# All 75 weak orderings of four items, as rank patterns
+all_patterns <- unique(t(apply(as.matrix(expand.grid(rep(list(0:3), 4))), 1, dense_rank)))
+stopifnot(nrow(all_patterns) == 75)
+
+# Evaluate the 75 definitions on point-mass PMFs (each event has one fixed count)
+point_mass <- function(k) { m <- matrix(0, 1, 5); m[k + 1] <- 1; m }
+hits <- t(apply(all_patterns, 1, function(p) {
+  cnt <- 4 - p
+  rank_probs_from_pmf(point_mass(cnt[1]), point_mass(cnt[2]), point_mass(cnt[3]), point_mass(cnt[4]))[1, ]
+}))
+stopifnot(all(rowSums(hits) == 1), all(colSums(hits) == 1))   # one-to-one
+pattern_of <- sapply(colnames(hits), function(nm) all_patterns[hits[, nm] == 1, ])
+
+pattern_text <- function(p) {
+  groups <- split(events, p)[order(as.numeric(names(split(events, p))))]
+  paste(sapply(groups, paste, collapse = " = "), collapse = " > ")
+}
+category_of <- setNames(rep(names(ranking_categories), lengths(ranking_categories)),
+                        unlist(ranking_categories))
+category_names <- c(logical = "Logical", stacked = "Stacked-illogical",
+                    interlaced = "Interlaced-illogical", other = "Other-illogical")
+
+catalogue <- tibble(id = colnames(pattern_of),
+                    ranking = apply(pattern_of, 2, pattern_text),
+                    category = category_names[category_of[id]])
+```
+
+There are `r sum(category_of == "logical")` logical, `r sum(category_of == "stacked")` stacked-illogical, `r sum(category_of == "interlaced")` interlaced-illogical and `r sum(category_of == "other")` other-illogical rankings.
+
+::: {.callout-note collapse="true"}
+## Full list of the 75 rankings
+
+```{r}
+#| label: tbl-catalogue
+#| echo: false
+catalogue %>%
+  mutate(category = factor(category, levels = category_names)) %>%
+  arrange(category) %>%
+  rename(ID = id, Ranking = ranking, Category = category) %>%
+  kable()
+```
+:::
+
+# Checks
+
+These checks run every time the document is rendered. If any fails, rendering stops with an error.
+
+```{r}
+#| label: checks
+#| code-fold: true
+check_results <- list()
+
+# 1. Fast method = direct enumeration of every combination of counts
+#    (the method used by the original code)
+brute_force <- function(N, a, b) {
+  p <- c(a, 1 - a, b, 1 - b)
+  g <- as.matrix(expand.grid(rep(list(0:N), 4)))
+  prob <- dbinom(g[, 1], N, p[1]) * dbinom(g[, 2], N, p[2]) *
+          dbinom(g[, 3], N, p[3]) * dbinom(g[, 4], N, p[4])
+  key <- apply(g, 1, function(v) paste(dense_rank(v), collapse = ""))
+  out <- tapply(prob, key, sum)
+  keys <- apply(pattern_of, 2, paste, collapse = "")
+  setNames(ifelse(keys %in% names(out), out[keys], 0), colnames(pattern_of))
+}
+set.seed(1)
+bf_cases <- expand_grid(N = c(1, 2, 3, 5, 8, 12), draw = 1:3) %>%
+  mutate(a = rbeta(n(), 5, 5), b = rbeta(n(), 4, 6))
+bf_diff <- pmap_dbl(bf_cases, function(N, draw, a, b) {
+  max(abs(get_diff_rates(N, a, 1 - a, b, 1 - b)[1, ] - brute_force(N, a, b)))
+})
+check_results[["Fast method equals direct enumeration of all counts (N = 1, 2, 3, 5, 8, 12)"]] <-
+  c(max(bf_diff) < 1e-12, sprintf("largest difference %.1e", max(bf_diff)))
+
+# 2. The 75 rankings are distinct and complete (verified above)
+check_results[["The 75 rankings are all different and cover every possible ranking"]] <-
+  c(TRUE, "one-to-one")
+
+# 3. Probabilities sum to 1 for every N
+worst_sum <- max(sapply(sample_size, function(N) {
+  max(abs(rowSums(get_diff_rates(N, bf_cases$a, 1 - bf_cases$a, bf_cases$b, 1 - bf_cases$b)) - 1))
+}))
+check_results[[sprintf("Probabilities of the 75 rankings sum to 1 (every sample size, N = 1 to %d)", max(sample_size))]] <-
+  c(worst_sum < 1e-12, sprintf("largest error %.1e", worst_sum))
+
+# 4. Every label follows the logic rules:
+#    logical = some true probabilities produce this exact ranking
+#    otherwise typed by the strict rankings it can be broken into
+grid <- (0:200) / 200
+possible <- unique(apply(expand.grid(a = grid, b = grid), 1, function(v)
+  paste(dense_rank(round(c(v[1], 1 - v[1], v[2], 1 - v[2]), 10)), collapse = "")))
+strict_type <- function(p) {
+  pair <- sort(p[1:2])                                   # positions of A and not-A
+  if (identical(pair, c(1, 4)) || identical(pair, c(2, 3))) "logical"
+  else if (identical(pair, c(1, 2)) || identical(pair, c(3, 4))) "stacked"
+  else "interlaced"
+}
+perms <- as.matrix(expand.grid(rep(list(1:4), 4)))
+perms <- perms[apply(perms, 1, function(x) length(unique(x)) == 4), ]
+logic_label <- apply(pattern_of, 2, function(p) {
+  if (paste(p, collapse = "") %in% possible) return("logical")
+  compatible <- perms[apply(perms, 1, function(x) all(outer(p, p, "<") <= outer(x, x, "<"))), , drop = FALSE]
+  types <- setdiff(unique(apply(compatible, 1, function(x) strict_type(as.numeric(x)))), "logical")
+  if (length(types) == 2) "other" else types
+})
+n_wrong <- sum(logic_label != category_of[names(logic_label)])
+check_results[["Every category label follows the logic rules"]] <-
+  c(n_wrong == 0, sprintf("%d of 75 labels disagree", n_wrong))
+
+check_tbl <- tibble(Check = names(check_results),
+                    Result = ifelse(map_chr(check_results, 1) == "TRUE", "Pass", "FAIL"),
+                    Detail = map_chr(check_results, 2))
+stopifnot(all(check_tbl$Result == "Pass"))
+```
+
+```{r}
+#| label: tbl-checks
+#| echo: false
+#| tbl-cap: "Correctness checks"
+kable(check_tbl)
+```
+
+# Simulation
+
+Each combination of noise level, condition and sample size is one job: `r length(d_values)` noise levels × `r nrow(conditions)` conditions × `r length(sample_size)` sample sizes = `r length(d_values) * nrow(conditions) * length(sample_size)` jobs. Every job draws its probabilities with the same seed and computes all 75 ranking probabilities for every draw. It then averages each category over the draws, and stops with an error if any draw's probabilities fail to sum to 1.
+
+```{r}
+#| label: simulation
+jobs <- expand_grid(d = d_values, cond = seq_len(nrow(conditions)), n = sample_size)
+
+run_job <- function(j) {
+  job  <- jobs[j, ]
+  cond <- conditions[job$cond, ]
+  set.seed(seed)                                        # same draws for every N and d
+  A <- rbeta(nsim, cond$A_shape1, cond$A_shape2)
+  B <- rbeta(nsim, cond$B_shape1, cond$B_shape2)        # B drawn after A
+  A <- (1 - 2 * job$d) * A + job$d                      # PT+N noise
+  B <- (1 - 2 * job$d) * B + job$d
+  rates <- get_diff_rates(job$n, A, 1 - A, B, 1 - B)
+  worst <- max(abs(rowSums(rates) - 1))
+  if (worst > 1e-9) stop(sprintf("job %d: probabilities sum to 1 +/- %.2e", j, worst))
+  cats <- categorise_with_ties(rates)
+  tibble(d = job$d, cond = job$cond, sample_size = job$n,
+         logical = mean(cats[, "logical"]), stacked = mean(cats[, "stacked"]),
+         interlaced = mean(cats[, "interlaced"]), other = mean(cats[, "other"]),
+         check = mean(cats[, "check"]), max_sum_error = worst)
+}
+
+n_cores <- max(1, min(detectCores(logical = FALSE) - 1, nrow(jobs)), na.rm = TRUE)
+t0 <- Sys.time()
+if (n_cores > 1 && .Platform$OS.type == "unix") {
+  job_out <- mclapply(seq_len(nrow(jobs)), run_job, mc.cores = n_cores)
+} else if (n_cores > 1) {                                 # Windows: socket cluster
+  cl <- makeCluster(n_cores)
+  clusterEvalQ(cl, { library(tidyverse); library(matrixStats) })
+  clusterExport(cl, ls(globalenv()), envir = globalenv())
+  job_out <- parLapply(cl, seq_len(nrow(jobs)), run_job)
+  stopCluster(cl)
+} else {
+  job_out <- lapply(seq_len(nrow(jobs)), run_job)
+}
+failed <- map_lgl(job_out, inherits, "try-error")
+if (any(failed)) stop("Some jobs failed:\n", paste(unlist(job_out[failed]), collapse = "\n"))
+run_seconds <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
+
+results <- bind_rows(job_out) %>%
+  left_join(conditions %>% mutate(cond = row_number()) %>%
+              select(cond, event_set, width, width_label, condition), by = "cond") %>%
+  mutate(noise = factor(sprintf("d = %g", d), levels = sprintf("d = %g", d_values)))
+stopifnot(nrow(results) == nrow(jobs), all(abs(results$check - 1) < 1e-9))
+```
+
+The simulation ran `r nrow(jobs)` jobs with `r format(nsim, big.mark = ",")` draws each, on `r n_cores` core(s), in `r round(run_seconds, 1)` seconds. Across all jobs and draws, the largest deviation of the ranking probabilities from summing to 1 was `r sprintf("%.1e", max(results$max_sum_error))`.
+
+```{r}
+#| label: test-run-warning
+#| results: asis
+#| echo: false
+if (nsim != 10000) {
+  cat("::: {.callout-warning}\n",
+      sprintf("**Test run:** rendered with only %s draws per condition, so the results are approximate. Render with the default nsim = 10000 for the final results.\n",
+              format(nsim, big.mark = ",")),
+      ":::\n", sep = "")
+}
+```
+
+# Results
+
+```{r}
+#| label: result-helpers
+#| include: false
+type_labels <- c(logical    = "Logical",
+                 stacked    = "Stacked-illogical",
+                 interlaced = "Interlaced-illogical",
+                 other      = "Other-illogical")
+type_levels  <- c("Other-illogical", "Interlaced-illogical", "Stacked-illogical", "Logical")
+type_colours <- setNames(c("#0072B2", "#CC79A7", "#F0E442", "#009E73"), type_levels)
+pct  <- function(x, digits = 0) sprintf(paste0("%.", digits, "f%%"), 100 * x)
+pct_range <- function(x, digits = 0) {
+  lo <- pct(min(x), digits); hi <- pct(max(x), digits)
+  if (lo == hi) lo else sprintf("%s&ndash;%s", lo, hi)   # HTML entity: displays correctly in any R locale
+}
+# Values across the five widths for one event set, noise level(s) and sample size(s)
+vals <- function(data, var, set, dd = d_values, n = sample_size) {
+  data %>% filter(event_set == set, d %in% dd, sample_size %in% n) %>% pull(all_of(var))
+}
+rng <- function(data, var, set, dd = d_values, n = sample_size, digits = 0) {
+  pct_range(vals(data, var, set, dd, n), digits)
+}
+width_labeller <- labeller(width_label = function(x) paste("Width", x))
+# Same, restricted to the given sample sizes
+wdiff_n <- function(data, var, set, dd, n) {
+  x <- data %>% filter(event_set == set, d %in% dd, sample_size %in% n, width %in% c(1, 5)) %>%
+    select(d, sample_size, width, value = all_of(var)) %>%
+    pivot_wider(names_from = width, values_from = value)
+  sprintf("%.1f", 100 * max(abs(x$`5` - x$`1`)))
+}
+# Largest difference between widest (width 1) and narrowest (width 5), in percentage points,
+# over all N >= 2 and the given noise level(s)
+wdiff <- function(data, var, set, dd = d_values) {
+  x <- data %>% filter(event_set == set, d %in% dd, sample_size >= 2, width %in% c(1, 5)) %>%
+    select(d, sample_size, width, value = all_of(var)) %>%
+    pivot_wider(names_from = width, values_from = value)
+  sprintf("%.1f", 100 * max(abs(x$`5` - x$`1`)))
+}
+```
+
+## Distribution of ranking types {#sec-distribution}
+
+@fig-distribution shows how all rankings are shared among the four types, for every event set, width, noise level and sample size. At each N the four bands add up to 100%.
+
+```{r}
+#| label: fig-distribution
+#| fig-cap: "Distribution of the four ranking types by sample size. Columns are event set × noise level; rows are widths, from widest (top) to narrowest (bottom). At each N the four bands add up to 100%."
+#| fig-height: 10
+#| fig-width: 10
+results %>%
+  pivot_longer(all_of(names(type_labels)), names_to = "type") %>%
+  mutate(type = factor(type_labels[type], levels = type_levels)) %>%   # logical at the bottom
+  ggplot(aes(sample_size, value, fill = type)) +
+  geom_area(colour = "#fcfcfb", linewidth = 0.3) +
+  facet_grid(width_label ~ event_set + noise, labeller = width_labeller) +
+  scale_fill_manual(values = type_colours) +
+  scale_x_continuous(breaks = c(1, 10, 20, 30, 40, 50), expand = c(0, 0)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), breaks = c(0, .5, 1),
+                     expand = c(0, 0)) +
+  labs(x = "Sample size (N)", y = "Share of rankings", fill = NULL) +
+  theme_report +
+  theme(strip.text.y = element_text(angle = 0, hjust = 0, face = "plain", colour = "#52514e"),
+        panel.grid.major = element_blank(),
+        panel.spacing.x = unit(0.8, "lines"),
+        legend.position = "top")
+```
+
+How the width of the distribution changes the four ranking types:
+
+- **Mid-event set:** narrower distributions give fewer logical rankings and more stacked-illogical and other-illogical rankings, at every sample size and both noise levels. Between the widest and narrowest distributions, the probability of a logical ranking differs by up to `r wdiff(results, "logical", "Mid-event")` percentage points.
+- **Edge-event set:** narrower distributions also give fewer logical rankings. Without noise, the difference goes almost entirely to interlaced-illogical rankings, which rise by up to `r wdiff(results, "interlaced", "Edge-event", 0)` percentage points. With noise, all four types change by at most `r max(as.numeric(sapply(c("logical", "stacked", "interlaced", "other"), function(v) wdiff(results, v, "Edge-event", 0.3))))` percentage points.
+
+## Step-by-step decomposition {#sec-decomposition}
+
+The distribution can be broken into three steps. Each step is a conditional probability, computed from the probabilities in @sec-distribution:
+
+1. **Logical rankings:** $\;P_1 = P(\text{logical})$
+2. **Other-illogical, given that the ranking is not logical:**
+   $$P_2 = P(\text{other-illogical} \mid \text{illogical}) = \frac{P(\text{other-illogical})}{1 - P(\text{logical})}$$
+3. **Stacked-illogical, given that the ranking is neither logical nor other-illogical:**
+   $$P_3 = P(\text{stacked} \mid \text{stacked or interlaced}) = \frac{P(\text{stacked-illogical})}{P(\text{stacked-illogical}) + P(\text{interlaced-illogical})}$$
+
+```{mermaid}
+%%| label: fig-tree
+%%| fig-cap: "The three steps. Each split is one conditional probability; the remaining branch is its complement."
+flowchart LR
+  R["All rankings"] -->|"Step 1: P₁"| L["Logical"]
+  R -->|"1 − P₁"| I["Illogical"]
+  I -->|"Step 2: P₂"| O["Other-illogical"]
+  I -->|"1 − P₂"| SI["Stacked or interlaced"]
+  SI -->|"Step 3: P₃"| S["Stacked-illogical"]
+  SI -->|"1 − P₃"| IL["Interlaced-illogical"]
+```
+
+The three steps fully describe the distribution. Multiplying along each branch of @fig-tree gives back every ranking type:
+
+$$P(\text{other}) = (1-P_1)\,P_2, \qquad P(\text{stacked}) = (1-P_1)(1-P_2)\,P_3, \qquad P(\text{interlaced}) = (1-P_1)(1-P_2)(1-P_3)$$
+
+```{r}
+#| label: decomposition
+decomp <- results %>%
+  mutate(step1 = logical,
+         step2 = other / (1 - logical),
+         step3 = stacked / (stacked + interlaced))
+
+# Check: the three steps rebuild the original distribution exactly
+rebuilt <- decomp %>%
+  transmute(other_r      = (1 - step1) * step2,
+            stacked_r    = (1 - step1) * (1 - step2) * step3,
+            interlaced_r = (1 - step1) * (1 - step2) * (1 - step3))
+rebuild_error <- max(abs(cbind(decomp$other, decomp$stacked, decomp$interlaced) - as.matrix(rebuilt)))
+stopifnot(rebuild_error < 1e-12)
+
+plot_step <- function(var, y_label) {
+  decomp %>%
+    ggplot(aes(sample_size, .data[[var]], colour = width_label)) +
+    geom_line(linewidth = 0.7) +
+    facet_grid(event_set ~ noise) +
+    scale_colour_manual(values = width_colours) +
+    scale_x_continuous(breaks = c(1, 10, 20, 30, 40, 50)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 1)) +
+    labs(x = "Sample size (N)", y = y_label, colour = "Width") +
+    theme_report
+}
+
+```
+
+Rebuilding the four types from the three steps reproduces them to within `r sprintf("%.0e", rebuild_error)`.
+
+### Step 1: probability of a logical ranking
+
+```{r}
+#| label: fig-step1
+#| fig-cap: "Step 1. Probability that the ranking is logical. Rows are event sets, columns are noise levels."
+#| fig-height: 6
+plot_step("step1", "P(logical)")
+```
+
+- **Narrower distributions give fewer logical rankings in both sets.** With noise, the five edge-event widths are almost identical up to N = 10 (they differ by at most `r wdiff_n(decomp, "step1", "Edge-event", 0.3, 2:10)` percentage points), then spread apart as N grows, reaching `r wdiff_n(decomp, "step1", "Edge-event", 0.3, max(sample_size))` points at N = `r max(sample_size)`.
+
+### Step 2: other-illogical, given an illogical ranking
+
+```{r}
+#| label: fig-step2
+#| fig-cap: "Step 2. Among illogical rankings, the probability that the ranking is other-illogical (an impossible tie). Rows are event sets, columns are noise levels."
+#| fig-height: 6
+plot_step("step2", "P(other-illogical | illogical)")
+```
+
+- **Mid-event set: narrower distributions make other-illogical rankings a larger share of illogical rankings.** This holds at every sample size above 1 and at both noise levels; the widest and narrowest distributions differ by up to `r wdiff(decomp, "step2", "Mid-event")` percentage points.
+- **Edge-event set: width makes almost no difference.** The widest and narrowest distributions differ by at most `r wdiff(decomp, "step2", "Edge-event")` percentage points, with no consistent direction.
+
+### Step 3: stacked-illogical, given a stacked or interlaced ranking
+
+```{r}
+#| label: fig-step3
+#| fig-cap: "Step 3. Among rankings that are neither logical nor other-illogical, the probability that the ranking is stacked-illogical rather than interlaced-illogical. Rows are event sets, columns are noise levels."
+#| fig-height: 6
+plot_step("step3", "P(stacked | stacked or interlaced)")
+```
+
+- **Mid-event set: narrower distributions make stacked-illogical rankings more likely relative to interlaced-illogical ones.** This holds at every sample size above 1 and at both noise levels; the widest and narrowest distributions differ by up to `r wdiff(decomp, "step3", "Mid-event")` percentage points.
+- **Edge-event set: width makes almost no difference.** The widest and narrowest distributions differ by at most `r wdiff(decomp, "step3", "Edge-event")` percentage points, with no consistent direction.
+
+## Tables
+
+Each table gives one probability by sample size, for each width. Columns are labelled with the Beta distributions of P(A) and P(B).
+
+```{r}
+#| label: tables
+#| results: asis
+#| echo: false
+col_names <- setNames(sprintf("Beta(%g,%g) / Beta(%g,%g)", conditions$A_shape1, conditions$A_shape2,
+                              conditions$B_shape1, conditions$B_shape2),
+                      levels(conditions$condition))
+table_vars <- c(logical    = "Logical",
+                stacked    = "Stacked-illogical",
+                interlaced = "Interlaced-illogical",
+                other      = "Other-illogical",
+                step2      = "Step 2: P(other | illogical)",
+                step3      = "Step 3: P(stacked | stacked or interlaced)")
+cat("::: {.panel-tabset}\n\n")
+for (v in names(table_vars)) {
+  cat("### ", table_vars[[v]], "\n\n", sep = "")
+  if (v == "logical") cat("This is also Step 1.\n\n")
+  for (es in levels(conditions$event_set)) {
+    for (dd in d_values) {
+      cat(sprintf("**%s set, %s**\n\n", es, if (dd == 0) "no noise (d = 0)" else sprintf("with noise (d = %g)", dd)))
+      tab <- decomp %>%
+        filter(event_set == es, d == dd) %>%
+        arrange(width) %>%
+        select(sample_size, condition, value = all_of(v)) %>%
+        mutate(condition = factor(col_names[as.character(condition)], levels = unique(col_names[as.character(condition)]))) %>%
+        pivot_wider(names_from = condition, values_from = value) %>%
+        rename(N = sample_size)
+      print(kable(tab, digits = 3, format = "pipe"))
+      cat("\n\n")
+    }
+  }
+}
+cat(":::\n")
+```
+
+## Download the data
+
+The full results are embedded in this file, so no separate download is needed. The CSV has one row per event set × width × noise level × sample size, with the four ranking types and the three steps.
+
+```{r}
+#| label: download
+#| results: asis
+#| echo: false
+results_out <- decomp %>%
+  arrange(event_set, width, d, sample_size) %>%
+  transmute(event_set = as.character(event_set), width, condition = as.character(condition),
+            d, sample_size,
+            p_logical = logical, p_stacked_illogical = stacked,
+            p_interlaced_illogical = interlaced, p_other_illogical = other,
+            check_sum = check,
+            step1_p_logical = step1,
+            step2_p_other_given_illogical = step2,
+            step3_p_stacked_given_stacked_or_interlaced = step3)
+csv_text <- format_csv(results_out)
+uri <- paste0("data:text/csv;base64,", base64encode(charToRaw(csv_text)))
+cat(sprintf('<a class="btn btn-primary" href="%s" download="pt_n_rank_results.csv">Download results as CSV (%d rows)</a>\n',
+            uri, nrow(results_out)))
+```
