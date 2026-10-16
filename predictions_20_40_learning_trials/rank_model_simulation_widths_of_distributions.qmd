@@ -74,7 +74,7 @@ sample_size <- c(1:20, seq(25, 50, by = 5))   # 1, 2, ..., 20, 25, 30, ..., 50
 d_values    <- c(0, 0.3)     # PT+N noise rates
 seed        <- 123
 
-width_levels <- c("1 (widest)", "2", "3", "4", "5 (narrowest)")
+width_levels <- c("10", "20", "30", "40", "50")   # value of a (10 = widest, 50 = narrowest)
 conditions <- tibble(
   event_set = rep(c("Mid-event", "Edge-event"), each = 5),
   width     = rep(1:5, times = 2),
@@ -137,7 +137,7 @@ conditions %>%
   geom_line(linewidth = 0.7) +
   facet_grid(event_set ~ event, scales = "free_y") +
   scale_colour_manual(values = width_colours) +
-  labs(x = "True probability", y = "Density", colour = "Width") +
+  labs(x = "True probability", y = "Density", colour = "a") +
   theme_report
 ```
 
@@ -469,7 +469,7 @@ vals <- function(data, var, set, dd = d_values, n = sample_size) {
 rng <- function(data, var, set, dd = d_values, n = sample_size, digits = 0) {
   pct_range(vals(data, var, set, dd, n), digits)
 }
-width_labeller <- labeller(width_label = function(x) paste("Width", x))
+width_labeller <- labeller(width_label = function(x) paste("a =", x))
 # Same, restricted to the given sample sizes
 wdiff_n <- function(data, var, set, dd, n) {
   x <- data %>% filter(event_set == set, d %in% dd, sample_size %in% n, width %in% c(1, 5)) %>%
@@ -512,6 +512,8 @@ results %>%
         panel.grid.major = element_blank(),
         panel.spacing.x = unit(0.8, "lines"),
         legend.position = "top")
+
+ggsave("figS5_distribution.pdf", width = 10, height = 10)
 ```
 
 How the width of the distribution changes the four ranking types:
@@ -568,7 +570,7 @@ plot_step <- function(var, y_label) {
     scale_colour_manual(values = width_colours) +
     scale_x_continuous(breaks = c(1, 10, 20, 30, 40, 50)) +
     scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 1)) +
-    labs(x = "Sample size (N)", y = y_label, colour = "Width") +
+    labs(x = "Sample size (N)", y = y_label, colour = "a") +
     theme_report
 }
 
@@ -582,7 +584,9 @@ Rebuilding the four types from the three steps reproduces them to within `r spri
 #| label: fig-step1
 #| fig-cap: "Step 1. Probability that the ranking is logical. Rows are event sets, columns are noise levels."
 #| fig-height: 6
-plot_step("step1", "P(logical)")
+p_step1 <- plot_step("step1", "P(logical)")
+p_step1
+ggsave("figS2_step1_logical.pdf", p_step1, width = 8, height = 6)
 ```
 
 - **Narrower distributions give fewer logical rankings in both sets.** With noise, the five edge-event widths are almost identical up to N = 10 (they differ by at most `r wdiff_n(decomp, "step1", "Edge-event", 0.3, 2:10)` percentage points), then spread apart as N grows, reaching `r wdiff_n(decomp, "step1", "Edge-event", 0.3, max(sample_size))` points at N = `r max(sample_size)`.
@@ -593,7 +597,9 @@ plot_step("step1", "P(logical)")
 #| label: fig-step2
 #| fig-cap: "Step 2. Among illogical rankings, the probability that the ranking is other-illogical (an impossible tie). Rows are event sets, columns are noise levels."
 #| fig-height: 6
-plot_step("step2", "P(other-illogical | illogical)")
+p_step2 <- plot_step("step2", "P(other-illogical | illogical)")
+p_step2
+ggsave("figS3_step2_other.pdf", p_step2, width = 8, height = 6)
 ```
 
 - **Mid-event set: narrower distributions make other-illogical rankings a larger share of illogical rankings.** This holds at every sample size above 1 and at both noise levels; the widest and narrowest distributions differ by up to `r wdiff(decomp, "step2", "Mid-event")` percentage points.
@@ -605,11 +611,37 @@ plot_step("step2", "P(other-illogical | illogical)")
 #| label: fig-step3
 #| fig-cap: "Step 3. Among rankings that are neither logical nor other-illogical, the probability that the ranking is stacked-illogical rather than interlaced-illogical. Rows are event sets, columns are noise levels."
 #| fig-height: 6
-plot_step("step3", "P(stacked | stacked or interlaced)")
+p_step3 <- plot_step("step3", "P(stacked | stacked or interlaced)")
+p_step3
+ggsave("figS4_step3_stacked.pdf", p_step3, width = 8, height = 6)
 ```
 
 - **Mid-event set: narrower distributions make stacked-illogical rankings more likely relative to interlaced-illogical ones.** This holds at every sample size above 1 and at both noise levels; the widest and narrowest distributions differ by up to `r wdiff(decomp, "step3", "Mid-event")` percentage points.
 - **Edge-event set: width makes almost no difference.** The widest and narrowest distributions differ by at most `r wdiff(decomp, "step3", "Edge-event")` percentage points, with no consistent direction.
+
+### All three steps in one figure
+
+```{r}
+#| label: fig-steps-combined
+#| fig-cap: "The three steps together. Columns are the three quantities; rows are event set × noise level; colour shows the width parameter a."
+#| fig-height: 10
+#| fig-width: 9
+p_steps <- decomp %>%
+  pivot_longer(c(step1, step2, step3), names_to = "step", values_to = "value") %>%
+  mutate(step = factor(step,
+                       levels = c("step1", "step2", "step3"),
+                       labels = c("Logical", "Other-illogical", "Stacked-illogical"))) %>%
+  ggplot(aes(sample_size, value, colour = width_label)) +
+  geom_line(linewidth = 0.7) +
+  facet_grid(event_set + noise ~ step) +
+  scale_colour_manual(values = width_colours) +
+  scale_x_continuous(breaks = c(1, 10, 20, 30, 40, 50)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  labs(x = "Sample size (N)", y = "Predicted (conditional) probability", colour = "a") +
+  theme_report
+p_steps
+ggsave("figS2_steps_combined.pdf", p_steps, width = 9, height = 10)
+```
 
 ## Tables
 
