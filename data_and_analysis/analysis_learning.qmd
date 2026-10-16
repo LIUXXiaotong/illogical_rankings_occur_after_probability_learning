@@ -328,10 +328,95 @@ df_learning_summary <- df_learning_summary  |>
 
 ### Plots
 
+```{r Realized probability of A, split by condition (low vs high)}
+
+# label styling
+strip_format <- as_labeller(function(x) {
+  x <- gsub("(\\d\\.\\d)0\\b", "\\1", x)  # 0.50 -> 0.5 (keep leading zero)
+  x <- gsub("not-A", "\u00acA", x)     # not-A -> ¬A, as in the manuscript
+  x <- gsub(" vs ", " vs. ", x)
+  gsub("A\\b", "*A*", x)              # italicize A (also after ¬)
+})
+
+condition_labels <- c("high" = "40 learning trials",
+                      "low"  = "20 learning trials")
+
+# data preparation 
+df_dist_cond <- df_learning_summary |>
+  distinct(id, condition,
+           `realized_A_0.50`, `realized_A_0.60`,
+           `realized_A_0.80`, `realized_A_0.90`) |>
+  pivot_longer(starts_with("realized_A"),
+               names_to = "pair_type", values_to = "Pr") |>
+  mutate(
+    pair_type = recode(pair_type,
+                       "realized_A_0.50" = "A (0.50) vs not-A (0.50)",
+                       "realized_A_0.60" = "A (0.60) vs not-A (0.40)",
+                       "realized_A_0.80" = "A (0.80) vs not-A (0.20)",
+                       "realized_A_0.90" = "A (0.90) vs not-A (0.10)"),
+    pair_type = factor(pair_type, levels = pair_type_levels),
+    condition = factor(condition, levels = c("high", "low"))
+  ) |>
+  # weight = 1/n within condition x pair type -> bars show proportions
+  group_by(condition, pair_type) |>
+  mutate(w = 1 / n()) |>
+  ungroup()
+
+# calculate mean and SD by condition and event-pair type 
+df_dist_cond |>
+  group_by(pair_type, condition) |>
+  summarise(n    = n(),
+            mean = round(mean(Pr), 3),
+            sd   = round(sd(Pr), 3),
+            .groups = "drop")
+
+# true p(A) grey reference line ----
+df_true_pA <- tibble(
+  pair_type = factor(pair_type_levels, levels = pair_type_levels),
+  p_A       = c(0.50, 0.60, 0.80, 0.90)
+)
+
+# ---- plot ----
+# colour-blind safe coloring 
+cond_colours <- c("high" = "#009E73",   # 40 learning trials
+                  "low"  = "#E69F00")   # 20 learning trials
+
+p_dist_cond <- ggplot(df_dist_cond,
+                      aes(x = Pr, weight = w, fill = condition, colour = condition)) +
+  geom_histogram(aes(y = after_stat(ifelse(count == 0, NA, count))),
+                 binwidth = 0.05, boundary = 0, na.rm = TRUE,
+                 position = "identity", alpha = 0.4, linewidth = 0.3) +
+  geom_vline(data = df_true_pA, aes(xintercept = p_A),
+             colour = "grey50", linetype = "dashed", linewidth = 0.4,
+             inherit.aes = FALSE) +
+  facet_grid(. ~ pair_type, labeller = labeller(pair_type = strip_format)) +
+  scale_fill_manual(name = "Condition", values = cond_colours,
+                    labels = condition_labels,
+                    aesthetics = c("fill", "colour")) +
+  scale_x_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1)) +
+  scale_y_continuous(labels = function(x) sprintf("%.2f", x)) +
+  coord_cartesian(xlim = c(0, 1)) +
+  labs(x = "Realized probability of event *A*",
+       y = "Proportion of participants") +
+  theme_classic() +
+  theme(strip.text   = element_markdown(size = 12),
+        axis.title.x = element_markdown(size = 14),
+        axis.title.y = element_markdown(size = 14),
+        legend.position = "bottom",
+        legend.title = element_text(size = 13),
+        legend.text  = element_text(size = 12))
+
+p_dist_cond
+
+ggsave("realized_P(A)s.pdf", width = 12, height = 6)
+```
+
 ```{r}
 strip_format <- as_labeller(function(x) {
-  x <- gsub("\\b0\\.", ".", x)
-  gsub("\\bA\\b", "*A*", x)
+  x <- gsub("(\\d\\.\\d)0\\b", "\\1", x)  # 0.50 -> 0.5 (keep leading zero)
+  x <- gsub("not-A", "\u00acA", x)     # not-A -> ¬A, as in the manuscript
+  x <- gsub(" vs ", " vs. ", x)
+  gsub("A\\b", "*A*", x)              # italicize A (also after ¬)
 })
 
 condition_labels <- c("high" = "40 learning trials",
@@ -363,7 +448,7 @@ p_dist <- ggplot(df_dist, aes(x = Pr)) +
              colour = "#c1272d", linetype = "dashed", linewidth = 1) +
   geom_text(data = df_dist_means,
             aes(x = Pr_mean, y = Inf,
-                label = sub("^0", "", sprintf("%.2f", Pr_mean))),
+                label = sprintf("%.2f", Pr_mean)),
             colour = "#c1272d",
             hjust = 1.5, vjust = 1.6, size = 4) + 
   facet_grid(. ~ pair_type, labeller = labeller(pair_type = strip_format)) +
@@ -396,7 +481,7 @@ p_main <- ggplot(df_learning_summary, aes(x = phase, y = prop_A)) +
   scale_colour_manual(
     name   = "Event with higher realized probability",
     values = c("A" = "#D55E00", "not-A" = "#0072B2", "tie" = "#4D4D4D"),
-    labels = c("A" = "*A*", "not-A" = "not-*A*", "tie" = "tie")) +
+    labels = c("A" = "*A*", "not-A" = "\u00ac*A*", "tie" = "tie")) +
   guides(colour = guide_legend(
     override.aes = list(shape = 16, size = 3, alpha = 1))) +
   facet_grid(condition ~ pair_type,
